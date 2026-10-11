@@ -1,4 +1,4 @@
-// ANDROID_LITE_BUILD=7
+// ANDROID_LITE_BUILD=6
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -186,38 +186,18 @@ final class OS: ObservableObject {
 // MARK: - Entry (UIKit host: hidden home bar, double-swipe exit, all gestures)
 extension UIViewController {
     static func installFullScreenHooks() {
-        let homeSel = #selector(getter: UIViewController.prefersHomeIndicatorAutoHidden)
-        let edgeSel = #selector(getter: UIViewController.preferredScreenEdgesDeferringSystemGestures)
-        let statusSel = #selector(getter: UIViewController.prefersStatusBarHidden)
-        let yes: @convention(block) (AnyObject) -> Bool = { _ in true }
-        let all: @convention(block) (AnyObject) -> UInt = { _ in UInt(UIRectEdge.all.rawValue) }
-        let yesImp = imp_implementationWithBlock(yes)
-        let allImp = imp_implementationWithBlock(all)
-
-        var count: UInt32 = 0
-        guard let list = objc_copyClassList(&count) else { return }
-        let base: AnyClass = UIViewController.self
-        for i in 0..<Int(count) {
-            let c: AnyClass = list[i]
-            var cur: AnyClass? = c
-            var isVC = false
-            while let x = cur {
-                if ObjectIdentifier(x) == ObjectIdentifier(base) { isVC = true; break }
-                cur = class_getSuperclass(x)
-            }
-            if !isVC { continue }
-            var mc: UInt32 = 0
-            guard let ms = class_copyMethodList(c, &mc) else { continue }
-            for j in 0..<Int(mc) {
-                let m = ms[j]
-                let name = method_getName(m)
-                if name == homeSel || name == statusSel {
-                    method_setImplementation(m, yesImp)
-                } else if name == edgeSel {
-                    method_setImplementation(m, allImp)
-                }
-            }
-            free(ms)
+        let c = UIViewController.self
+        if let m = class_getInstanceMethod(c, #selector(getter: UIViewController.prefersHomeIndicatorAutoHidden)) {
+            let blk: @convention(block) (AnyObject) -> Bool = { _ in true }
+            method_setImplementation(m, imp_implementationWithBlock(blk))
+        }
+        if let m = class_getInstanceMethod(c, #selector(getter: UIViewController.preferredScreenEdgesDeferringSystemGestures)) {
+            let blk: @convention(block) (AnyObject) -> UInt = { _ in UInt(UIRectEdge.all.rawValue) }
+            method_setImplementation(m, imp_implementationWithBlock(blk))
+        }
+        if let m = class_getInstanceMethod(c, #selector(getter: UIViewController.prefersStatusBarHidden)) {
+            let blk: @convention(block) (AnyObject) -> Bool = { _ in true }
+            method_setImplementation(m, imp_implementationWithBlock(blk))
         }
     }
 }
@@ -344,29 +324,7 @@ enum GestureInstaller {
         installed = true
         w.rootViewController?.setNeedsUpdateOfHomeIndicatorAutoHidden()
         w.rootViewController?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
-        let rootName = w.rootViewController.map { NSStringFromClass(type(of: $0)) } ?? "none"
-        os.debug = "gestures on · " + rootName
-        for d in [0.0, 0.3, 1.0, 2.5] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + d) {
-                UIViewController.installFullScreenHooks()
-                refreshBars()
-            }
-        }
-    }
-
-    static func refreshBars() {
-        for sc in UIApplication.shared.connectedScenes {
-            guard let ws = sc as? UIWindowScene else { continue }
-            for w in ws.windows {
-                var vc = w.rootViewController
-                while let v = vc {
-                    v.setNeedsUpdateOfHomeIndicatorAutoHidden()
-                    v.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
-                    v.setNeedsStatusBarAppearanceUpdate()
-                    vc = v.presentedViewController
-                }
-            }
-        }
+        os.debug = "gestures on"
     }
 }
 
@@ -431,7 +389,6 @@ struct PhoneView: View {
                 Home()
                     .scaleEffect(os.appShown ? 0.94 : 1)
                     .opacity(os.appShown ? 0.6 : 1)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.86), value: os.appShown)
                 if let a = os.open {
                     AppHost(app: a, anchor: anchor())
                         .id(a.id)
@@ -668,7 +625,7 @@ struct Home: View {
                 Text(fmtDate("EEEE, MMM d"))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.white)
-                Text("build 7" + (os.debug.isEmpty ? "" : " · " + os.debug))
+                Text("build 6" + (os.debug.isEmpty ? "" : " · " + os.debug))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
             }
@@ -1079,7 +1036,6 @@ struct AppHost: View {
             .clipShape(RoundedRectangle(cornerRadius: on ? 46 * os.dragProg : 220, style: .continuous))
             .scaleEffect(on ? 1 - 0.25 * os.dragProg : 0.12, anchor: anchor)
             .opacity(on ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.82), value: on)
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
                     withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) { up = true }
@@ -1491,7 +1447,7 @@ struct SettingsApp: View {
                     BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 8)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("About phone").foregroundColor(.white)
-                        Text("Android Lite · Android 16 style · Build 7")
+                        Text("Android Lite · Android 16 style · Build 6")
                             .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
