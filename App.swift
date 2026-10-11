@@ -1,4 +1,4 @@
-// ANDROID_LITE_BUILD=5
+// ANDROID_LITE_BUILD=6
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -84,6 +84,7 @@ final class OS: ObservableObject {
     @Published var showRecents = false
     @Published var drawer = false
     @Published var appShown = false
+    @Published var debug = ""
     @Published var backDrag: CGFloat = 0
     @Published var backLeft = true
     @Published var dragProg: CGFloat = 0
@@ -156,18 +157,15 @@ final class OS: ObservableObject {
 
     func launch(_ a: AppInfo, from p: CGPoint? = nil) {
         origin = p
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.88)) {
             recents.removeAll { $0.id == a.id }
             recents.insert(a, at: 0)
             showRecents = false
             drawer = false
             panel = .none
+            appShown = true
         }
-        appShown = false
         open = a
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) { self.appShown = true }
-        }
     }
 
     func home() {
@@ -244,6 +242,7 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
                 os.backDrag = 0
                 os.dragProg = 0
             }
+            os.debug = "swipe m\(mode) \(Int(t.x)),\(Int(t.y))"
             if g.state == .ended { finish(t, vel, w, h) }
         default:
             break
@@ -298,24 +297,41 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
     }
 }
 
-final class HostVC: UIHostingController<AnyView> {
-    var handler: PanHandler? = nil
+enum GestureInstaller {
+    static var installed = false
+    static var retained: PanHandler? = nil
 
-    override var prefersHomeIndicatorAutoHidden: Bool { true }
-    override var prefersStatusBarHidden: Bool { true }
-    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
-
-    func attach(_ os: OS) {
+    static func install(os: OS, tries: Int = 0) {
+        if installed { return }
+        let wins = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        guard let w = wins.first(where: { $0.isKeyWindow }) ?? wins.first else {
+            if tries < 40 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { install(os: os, tries: tries + 1) }
+            }
+            return
+        }
         let h = PanHandler(os: os)
-        handler = h
+        retained = h
         let p = UIPanGestureRecognizer(target: h, action: #selector(PanHandler.pan(_:)))
         p.maximumNumberOfTouches = 1
         p.cancelsTouchesInView = false
         p.delaysTouchesBegan = false
         p.delaysTouchesEnded = false
         p.delegate = h
-        view.addGestureRecognizer(p)
+        w.addGestureRecognizer(p)
+        installed = true
+        w.rootViewController?.setNeedsUpdateOfHomeIndicatorAutoHidden()
+        w.rootViewController?.setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
+        os.debug = "gestures on"
     }
+}
+
+final class HostVC: UIHostingController<AnyView> {
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
+    override var prefersStatusBarHidden: Bool { true }
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
@@ -330,9 +346,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let ws = scene as? UIWindowScene else { return }
         let os = OS()
         let w = UIWindow(windowScene: ws)
-        let vc = HostVC(rootView: AnyView(PhoneView(os: os).preferredColorScheme(.dark)))
+        let vc = HostVC(rootView: AnyView(PhoneView(os: os).preferredColorScheme(.dark).persistentSystemOverlays(.hidden).defersSystemGestures(on: .all)))
         vc.view.backgroundColor = .black
-        vc.attach(os)
         w.rootViewController = vc
         w.makeKeyAndVisible()
         window = w
@@ -375,11 +390,9 @@ struct PhoneView: View {
                     .scaleEffect(os.appShown ? 0.94 : 1)
                     .opacity(os.appShown ? 0.6 : 1)
                 if let a = os.open {
-                    AppWindow(app: a)
-                        .clipShape(RoundedRectangle(cornerRadius: os.appShown ? 46 * os.dragProg : 220,
-                                                    style: .continuous))
-                        .scaleEffect(os.appShown ? 1 - 0.25 * os.dragProg : 0.12, anchor: anchor())
-                        .opacity(os.appShown ? 1 : 0)
+                    AppHost(app: a, anchor: anchor())
+                        .id(a.id)
+                        .transition(.identity)
                         .zIndex(1)
                 }
                 if os.drawer && os.open == nil {
@@ -426,6 +439,7 @@ struct PhoneView: View {
             .onAppear {
                 os.top = g.safeAreaInsets.top
                 os.bottom = g.safeAreaInsets.bottom
+                GestureInstaller.install(os: os)
             }
         }
         .environmentObject(os)
@@ -611,7 +625,7 @@ struct Home: View {
                 Text(fmtDate("EEEE, MMM d"))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.white)
-                Text("build 5")
+                Text("build 6" + (os.debug.isEmpty ? "" : " · " + os.debug))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
             }
@@ -1007,6 +1021,26 @@ struct AppWindow: View {
         case "photos": PhotosApp()
         default: EmptyView()
         }
+    }
+}
+
+struct AppHost: View {
+    @EnvironmentObject var os: OS
+    let app: AppInfo
+    let anchor: UnitPoint
+    @State var up = false
+
+    var body: some View {
+        let on = up && os.appShown
+        AppWindow(app: app)
+            .clipShape(RoundedRectangle(cornerRadius: on ? 46 * os.dragProg : 220, style: .continuous))
+            .scaleEffect(on ? 1 - 0.25 * os.dragProg : 0.12, anchor: anchor)
+            .opacity(on ? 1 : 0)
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                    withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) { up = true }
+                }
+            }
     }
 }
 
@@ -1413,7 +1447,7 @@ struct SettingsApp: View {
                     BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 8)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("About phone").foregroundColor(.white)
-                        Text("Android Lite · Android 16 style · Build 5")
+                        Text("Android Lite · Android 16 style · Build 6")
                             .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
