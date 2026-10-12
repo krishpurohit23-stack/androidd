@@ -1,4 +1,4 @@
-// ANDROID_LITE_BUILD=8
+// ANDROID_LITE_BUILD=9
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -138,6 +138,42 @@ final class OS: ObservableObject {
         }
     }
 
+    var lastFire: [String: Date] = [:]
+
+    func allow(_ k: String) -> Bool {
+        let now = Date()
+        if let t = lastFire[k], now.timeIntervalSince(t) < 0.5 { return false }
+        lastFire[k] = now
+        return true
+    }
+
+    func backEnded(_ dx: CGFloat) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { backDrag = 0 }
+        if dx > 70 && allow("back") { goBack() }
+    }
+
+    func bottomEnded(_ dy: CGFloat, slow: Bool) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragProg = 0 }
+        if dy > -30 { return }
+        guard allow("bottom") else { return }
+        if dy < -150 && slow {
+            withAnimation(.easeOut(duration: 0.25)) { showRecents = true }
+        } else if open == nil && !drawer && !showRecents {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { drawer = true }
+        } else {
+            home()
+        }
+    }
+
+    func topOpen(left: Bool) {
+        guard allow("top") else { return }
+        if panel == .none {
+            withAnimation(.easeOut(duration: 0.25)) { panel = left ? .notif : .qs }
+        } else if panel == .notif {
+            withAnimation(.easeOut(duration: 0.25)) { panel = .qs }
+        }
+    }
+
     func closePanel() {
         withAnimation(.easeOut(duration: 0.25)) { panel = .none }
     }
@@ -234,9 +270,9 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
         case .began:
             let loc = g.location(in: v)
             start = CGPoint(x: loc.x - t.x, y: loc.y - t.y)
-            if start.x < 28 { mode = 1 }
-            else if start.x > w - 28 { mode = 2 }
-            else if start.y > h - 70 { mode = 3 }
+            if start.x < 44 { mode = 1 }
+            else if start.x > w - 44 { mode = 2 }
+            else if start.y > h - 90 { mode = 3 }
             else if start.y < 90 { mode = 4 }
             else { mode = 5 }
         case .changed:
@@ -251,61 +287,49 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
             }
         case .ended, .cancelled:
             let vel = g.velocity(in: v)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                os.backDrag = 0
-                os.dragProg = 0
-            }
             os.debug = "swipe m\(mode) \(Int(t.x)),\(Int(t.y))"
-            if g.state == .ended { finish(t, vel, w, h) }
+            if g.state == .ended {
+                switch mode {
+                case 1: os.backEnded(t.x)
+                case 2: os.backEnded(-t.x)
+                case 3: os.bottomEnded(t.y, slow: abs(vel.y) < 500)
+                case 4:
+                    if t.y > 30 {
+                        os.topOpen(left: start.x < w / 2)
+                    } else if t.y < -30 && os.panel != .none {
+                        os.closePanel()
+                    }
+                default:
+                    free(t)
+                }
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    os.backDrag = 0
+                    os.dragProg = 0
+                }
+            }
         default:
             break
         }
     }
 
-    func finish(_ t: CGPoint, _ vel: CGPoint, _ w: CGFloat, _ h: CGFloat) {
-        switch mode {
-        case 1:
-            if t.x > 70 { os.goBack() }
-        case 2:
-            if t.x < -70 { os.goBack() }
-        case 3:
-            if t.y < -150 && abs(vel.y) < 500 {
-                withAnimation(.easeOut(duration: 0.25)) { os.showRecents = true }
-            } else if t.y < -30 {
-                if os.open == nil && !os.drawer && !os.showRecents {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = true }
-                } else {
-                    os.home()
-                }
-            }
-        case 4:
-            if t.y > 30 {
-                if os.panel == .none {
-                    withAnimation(.easeOut(duration: 0.25)) { os.panel = start.x < w / 2 ? .notif : .qs }
-                } else if os.panel == .notif {
-                    withAnimation(.easeOut(duration: 0.25)) { os.panel = .qs }
-                }
-            } else if t.y < -30 && os.panel != .none {
+    func free(_ t: CGPoint) {
+        if os.panel != .none {
+            if t.y < -40 && (start.y > 380 || t.y < -140) {
                 os.closePanel()
+            } else if t.y > 50 && os.panel == .notif && start.y < 260 {
+                withAnimation(.easeOut(duration: 0.25)) { os.panel = .qs }
             }
-        default:
-            if os.panel != .none {
-                if t.y < -40 && (start.y > 380 || t.y < -140) {
-                    os.closePanel()
-                } else if t.y > 50 && os.panel == .notif && start.y < 260 {
-                    withAnimation(.easeOut(duration: 0.25)) { os.panel = .qs }
+        } else if os.open == nil && !os.drawer && !os.showRecents {
+            if abs(t.y) > abs(t.x) {
+                if t.y > 60 {
+                    withAnimation(.easeOut(duration: 0.25)) { os.panel = .notif }
+                } else if t.y < -60 {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = true }
                 }
-            } else if os.open == nil && !os.drawer && !os.showRecents {
-                if abs(t.y) > abs(t.x) {
-                    if t.y > 60 {
-                        withAnimation(.easeOut(duration: 0.25)) { os.panel = .notif }
-                    } else if t.y < -60 {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = true }
-                    }
-                }
-            } else if os.drawer && t.y > 80 && start.y < 170 {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = false }
             }
+        } else if os.drawer && t.y > 80 && start.y < 170 {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = false }
         }
     }
 }
@@ -423,8 +447,8 @@ struct PhoneView: View {
             ZStack {
                 Wallpaper().ignoresSafeArea()
                 Home()
-                    .scaleEffect(os.appShown ? 0.94 : 1)
-                    .opacity(os.appShown ? 0.6 : 1)
+                    .scaleEffect(os.appShown ? 0.94 + 0.06 * os.dragProg : 1)
+                    .opacity(os.appShown ? 0.6 + 0.4 * Double(os.dragProg) : 1)
                     .animation(.spring(response: 0.5, dampingFraction: 0.86), value: os.appShown)
                 if let a = os.open {
                     AppHost(app: a, anchor: anchor())
@@ -451,6 +475,14 @@ struct PhoneView: View {
                     NavZone()
                 }
                 .zIndex(4)
+                HStack(spacing: 0) {
+                    EdgeStrip(left: true)
+                    Spacer()
+                    EdgeStrip(left: false)
+                }
+                .padding(.top, 70)
+                .padding(.bottom, 50)
+                .zIndex(7)
                 if os.backDrag > 4 {
                     HStack {
                         if !os.backLeft { Spacer() }
@@ -500,11 +532,33 @@ struct Wallpaper: View {
 
 // MARK: - Status bar (left half = notifications, right half = quick settings)
 struct Zone: View {
-    let action: () -> Void
+    let tap: () -> Void
+    let drag: () -> Void
     var body: some View {
         Color.clear
             .contentShape(Rectangle())
-            .onTapGesture { action() }
+            .onTapGesture { tap() }
+            .gesture(DragGesture(minimumDistance: 8).onEnded { v in
+                if v.translation.height > 12 { drag() }
+            })
+    }
+}
+
+struct EdgeStrip: View {
+    @EnvironmentObject var os: OS
+    let left: Bool
+    var body: some View {
+        Color.clear
+            .frame(width: 22)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 6)
+                .onChanged { v in
+                    os.backLeft = left
+                    os.backDrag = max(0, left ? v.translation.width : -v.translation.width)
+                }
+                .onEnded { v in
+                    os.backEnded(left ? v.translation.width : -v.translation.width)
+                })
     }
 }
 
@@ -537,8 +591,8 @@ struct StatusBar: View {
         .frame(height: max(os.top, 30))
         .overlay(
             HStack(spacing: 0) {
-                Zone { show(.notif) }
-                Zone { show(.qs) }
+                Zone(tap: { show(.notif) }, drag: { os.topOpen(left: true) })
+                Zone(tap: { show(.qs) }, drag: { os.topOpen(left: false) })
             }
         )
     }
@@ -571,15 +625,26 @@ struct Banner: View {
     }
 }
 
-// MARK: - Gesture nav pill (swipes are handled by the UIKit pan layer)
+// MARK: - Gesture nav pill (swipe up: close app / drawer, swipe up + hold: recents)
 struct NavZone: View {
+    @EnvironmentObject var os: OS
     var body: some View {
         Capsule()
             .fill(Color.white.opacity(0.85))
             .frame(width: 118, height: 5)
             .shadow(color: .black.opacity(0.4), radius: 2)
-            .frame(maxWidth: .infinity, minHeight: 36, alignment: .center)
-            .allowsHitTesting(false)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 6)
+                .onChanged { v in
+                    if os.open != nil && os.appShown {
+                        os.dragProg = min(1, max(0, -v.translation.height) / 300)
+                    }
+                }
+                .onEnded { v in
+                    let slow = abs(v.predictedEndTranslation.height - v.translation.height) < 100
+                    os.bottomEnded(v.translation.height, slow: slow)
+                })
     }
 }
 
@@ -662,7 +727,7 @@ struct Home: View {
                 Text(fmtDate("EEEE, MMM d"))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.white)
-                Text("build 8" + (os.debug.isEmpty ? "" : " · " + os.debug))
+                Text("build 9" + (os.debug.isEmpty ? "" : " · " + os.debug))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
             }
@@ -1069,14 +1134,18 @@ struct AppHost: View {
 
     var body: some View {
         let on = up && os.appShown
+        let bp = min(1, os.backDrag / 200)
+        let shrink = os.dragProg * 0.3 + bp * 0.08
+        let radius: CGFloat = on ? max(46 * os.dragProg, 38 * bp) : 220
         AppWindow(app: app)
-            .clipShape(RoundedRectangle(cornerRadius: on ? 46 * os.dragProg : 220, style: .continuous))
-            .scaleEffect(on ? 1 - 0.25 * os.dragProg : 0.12, anchor: anchor)
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .scaleEffect(on ? 1 - shrink : 0.12, anchor: anchor)
+            .offset(y: on ? -os.dragProg * 110 : 0)
             .opacity(on ? 1 : 0)
             .animation(.spring(response: 0.5, dampingFraction: 0.82), value: on)
             .onAppear {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                    withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) { up = true }
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { up = true }
                 }
             }
     }
@@ -1485,7 +1554,7 @@ struct SettingsApp: View {
                     BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 8)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("About phone").foregroundColor(.white)
-                        Text("Android Lite · Android 16 style · Build 8")
+                        Text("Android Lite · Android 16 style · Build 9")
                             .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
