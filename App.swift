@@ -1,16 +1,45 @@
-// ANDROID_LITE_BUILD=11
+// ANDROID_LITE_BUILD=12
 import SwiftUI
 import AVFoundation
 import WebKit
 import ImageIO
+import PhotosUI
 
 // MARK: - Theme (Material 3 Expressive / Pixel look)
 enum T {
+    static var palette = 0
+    static let accents: [Color] = [
+        Color(red: 0.66, green: 0.78, blue: 1.0),
+        Color(red: 0.62, green: 0.90, blue: 0.66),
+        Color(red: 1.0, green: 0.72, blue: 0.82),
+        Color(red: 1.0, green: 0.78, blue: 0.50),
+        Color(red: 0.80, green: 0.72, blue: 1.0),
+        Color(red: 0.55, green: 0.90, blue: 0.90)
+    ]
+    static let onAccents: [Color] = [
+        Color(red: 0.0, green: 0.18, blue: 0.38),
+        Color(red: 0.0, green: 0.25, blue: 0.10),
+        Color(red: 0.35, green: 0.0, blue: 0.15),
+        Color(red: 0.30, green: 0.15, blue: 0.0),
+        Color(red: 0.20, green: 0.05, blue: 0.40),
+        Color(red: 0.0, green: 0.25, blue: 0.25)
+    ]
     static let bg = Color(red: 0.08, green: 0.09, blue: 0.11)
     static let card = Color(red: 0.16, green: 0.18, blue: 0.22)
-    static let accent = Color(red: 0.66, green: 0.78, blue: 1.0)
-    static let onAccent = Color(red: 0.0, green: 0.18, blue: 0.38)
+    static var accent: Color { accents[min(max(palette, 0), 5)] }
+    static var onAccent: Color { onAccents[min(max(palette, 0), 5)] }
 }
+
+enum UD {
+    static func b(_ k: String, _ d: Bool) -> Bool {
+        UserDefaults.standard.object(forKey: k) == nil ? d : UserDefaults.standard.bool(forKey: k)
+    }
+    static func i(_ k: String, _ d: Int) -> Int {
+        UserDefaults.standard.object(forKey: k) == nil ? d : UserDefaults.standard.integer(forKey: k)
+    }
+}
+
+func rgb(_ r: Double, _ g: Double, _ b: Double) -> Color { Color(red: r, green: g, blue: b) }
 
 func fmtDate(_ f: String) -> String {
     let d = DateFormatter()
@@ -126,6 +155,75 @@ let canned: [String] = ["Haha okay!", "Sounds good 👍", "Call you later", "On 
 
 enum Panel { case none, notif, qs }
 
+struct WP {
+    let name: String
+    let a: Color
+    let b: Color
+    let c: Color
+    let d: Color
+}
+
+let wallpapers: [WP] = [
+    WP(name: "Dusk", a: rgb(0.05, 0.08, 0.20), b: rgb(0.16, 0.10, 0.30), c: rgb(0.30, 0.50, 0.90), d: rgb(0.85, 0.40, 0.70)),
+    WP(name: "Aurora", a: rgb(0.02, 0.12, 0.15), b: rgb(0.05, 0.20, 0.30), c: rgb(0.20, 0.90, 0.60), d: rgb(0.40, 0.50, 1.00)),
+    WP(name: "Sunset", a: rgb(0.20, 0.06, 0.15), b: rgb(0.40, 0.12, 0.10), c: rgb(1.00, 0.50, 0.20), d: rgb(1.00, 0.30, 0.50)),
+    WP(name: "Ocean", a: rgb(0.00, 0.08, 0.18), b: rgb(0.00, 0.20, 0.35), c: rgb(0.10, 0.60, 0.90), d: rgb(0.00, 0.80, 0.80)),
+    WP(name: "Forest", a: rgb(0.03, 0.10, 0.05), b: rgb(0.06, 0.18, 0.10), c: rgb(0.40, 0.80, 0.30), d: rgb(0.80, 0.90, 0.40)),
+    WP(name: "Berry", a: rgb(0.15, 0.03, 0.12), b: rgb(0.28, 0.05, 0.22), c: rgb(0.90, 0.30, 0.70), d: rgb(0.60, 0.30, 1.00)),
+    WP(name: "Desert", a: rgb(0.22, 0.14, 0.08), b: rgb(0.35, 0.20, 0.10), c: rgb(1.00, 0.70, 0.35), d: rgb(0.90, 0.45, 0.30)),
+    WP(name: "Midnight", a: rgb(0.02, 0.02, 0.06), b: rgb(0.05, 0.05, 0.12), c: rgb(0.30, 0.30, 0.70), d: rgb(0.50, 0.30, 0.80)),
+    WP(name: "Neon", a: rgb(0.04, 0.00, 0.10), b: rgb(0.10, 0.00, 0.20), c: rgb(0.00, 1.00, 0.90), d: rgb(1.00, 0.20, 0.80)),
+    WP(name: "Peach", a: rgb(0.25, 0.12, 0.14), b: rgb(0.40, 0.20, 0.20), c: rgb(1.00, 0.70, 0.60), d: rgb(1.00, 0.85, 0.60))
+]
+
+let animNames: [String] = [
+    "iPhone zoom (native)", "Window zoom", "Classic zoom", "Slide up", "Fade",
+    "Slide from right", "Pop", "Flip", "Drop down", "Circle reveal"
+]
+
+struct SCat: Identifiable {
+    let id: String
+    let title: String
+    let sub: String
+    let icon: String
+    let tint: Color
+}
+
+let settingsCats: [SCat] = [
+    SCat(id: "network", title: "Network & internet", sub: "Wi-Fi, airplane mode", icon: "wifi", tint: rgb(0.55, 0.75, 1.0)),
+    SCat(id: "devices", title: "Connected devices", sub: "Bluetooth, pairing", icon: "dot.radiowaves.left.and.right", tint: rgb(0.75, 0.70, 1.0)),
+    SCat(id: "apps", title: "Apps", sub: "Installed apps and web apps", icon: "square.grid.2x2.fill", tint: rgb(1.0, 0.75, 0.40)),
+    SCat(id: "notifs", title: "Notifications", sub: "Banners, Do Not Disturb", icon: "bell.fill", tint: rgb(1.0, 0.65, 0.60)),
+    SCat(id: "battery", title: "Battery", sub: "Level and Battery Saver", icon: "battery.100", tint: rgb(0.55, 0.90, 0.60)),
+    SCat(id: "storage", title: "Storage", sub: "Space used and free", icon: "internaldrive.fill", tint: rgb(0.70, 0.80, 0.85)),
+    SCat(id: "sound", title: "Sound & vibration", sub: "Touch haptics", icon: "speaker.wave.2.fill", tint: rgb(0.95, 0.60, 0.85)),
+    SCat(id: "display", title: "Display", sub: "Brightness, screen on, motion", icon: "sun.max.fill", tint: rgb(1.0, 0.85, 0.45)),
+    SCat(id: "wallpaper", title: "Wallpaper & style", sub: "Wallpapers, colors, icon shape", icon: "paintpalette.fill", tint: rgb(0.95, 0.60, 0.85)),
+    SCat(id: "home", title: "Home screen", sub: "Widgets, clock, grid", icon: "house.fill", tint: rgb(0.60, 0.80, 1.0)),
+    SCat(id: "anim", title: "App animations", sub: "10 styles and speed", icon: "sparkles", tint: rgb(0.75, 0.70, 1.0)),
+    SCat(id: "access", title: "Accessibility", sub: "Reduce motion, developer", icon: "figure.stand", tint: rgb(0.55, 0.90, 0.60)),
+    SCat(id: "security", title: "Security & privacy", sub: "Lock screen, hide content", icon: "lock.fill", tint: rgb(1.0, 0.65, 0.60)),
+    SCat(id: "location", title: "Location", sub: "Permissions on iOS", icon: "location.fill", tint: rgb(0.55, 0.75, 1.0)),
+    SCat(id: "wellbeing", title: "Digital Wellbeing", sub: "App usage", icon: "hourglass", tint: rgb(0.55, 0.90, 0.60)),
+    SCat(id: "system", title: "System", sub: "Reset and gestures", icon: "gearshape.2.fill", tint: rgb(0.70, 0.80, 0.85)),
+    SCat(id: "about", title: "About phone", sub: "Device and build", icon: "info.circle.fill", tint: rgb(0.75, 0.70, 1.0))
+]
+
+func gb(_ bytes: Int64) -> String { String(format: "%.1f GB", Double(bytes) / 1_000_000_000) }
+
+func storageInfo() -> (free: Int64, total: Int64) {
+    let url = URL(fileURLWithPath: NSHomeDirectory())
+    let v = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeTotalCapacityKey])
+    let free: Int64 = v?.volumeAvailableCapacityForImportantUsage ?? 0
+    let total: Int64 = Int64(v?.volumeTotalCapacity ?? 0)
+    return (free, total)
+}
+
+func durText(_ s: Double) -> String {
+    let m = Int(s) / 60
+    return m < 1 ? "\(Int(s)) sec" : "\(m) min"
+}
+
 // MARK: - "OS" state
 final class OS: ObservableObject {
     @Published var open: AppInfo? = nil
@@ -141,6 +239,39 @@ final class OS: ObservableObject {
     @Published var animSpeed: Double = 1.0 { didSet { UserDefaults.standard.set(animSpeed, forKey: "al_animSpeed") } }
     @Published var webApps: [WebAppRec] = [] { didSet { saveWebApps() } }
     var webModels: [String: WebModel] = [:]
+    @Published var reduceMotion = false { didSet { UserDefaults.standard.set(reduceMotion, forKey: "al_reduce") } }
+    @Published var wallpaper = 0 { didSet { UserDefaults.standard.set(wallpaper, forKey: "al_wp") } }
+    @Published var wallpaperImage: UIImage? = nil
+    @Published var theme = 0 {
+        didSet {
+            T.palette = theme
+            UserDefaults.standard.set(theme, forKey: "al_theme")
+        }
+    }
+    @Published var iconShape = 0 { didSet { UserDefaults.standard.set(iconShape, forKey: "al_shape") } }
+    @Published var gridCols = 4 { didSet { UserDefaults.standard.set(gridCols, forKey: "al_cols") } }
+    @Published var showSearch = true { didSet { UserDefaults.standard.set(showSearch, forKey: "al_search") } }
+    @Published var showClock = true { didSet { UserDefaults.standard.set(showClock, forKey: "al_clock") } }
+    @Published var clockStyle = 0 { didSet { UserDefaults.standard.set(clockStyle, forKey: "al_clockstyle") } }
+    @Published var widgets: [String] = ["battery", "calendar"] {
+        didSet { UserDefaults.standard.set(widgets.joined(separator: ","), forKey: "al_widgets") }
+    }
+    @Published var haptics = true { didSet { UserDefaults.standard.set(haptics, forKey: "al_haptics") } }
+    @Published var keepAwake = false {
+        didSet {
+            UIApplication.shared.isIdleTimerDisabled = keepAwake
+            UserDefaults.standard.set(keepAwake, forKey: "al_awake")
+        }
+    }
+    @Published var hideNotif = false { didSet { UserDefaults.standard.set(hideNotif, forKey: "al_hidenotif") } }
+    @Published var banners = true { didSet { UserDefaults.standard.set(banners, forKey: "al_banners") } }
+    @Published var lockOn = false { didSet { UserDefaults.standard.set(lockOn, forKey: "al_lock") } }
+    @Published var locked = false
+    @Published var showBuild = true { didSet { UserDefaults.standard.set(showBuild, forKey: "al_build") } }
+    @Published var settingsPage = ""
+    @Published var usage: [String: Double] = [:] { didSet { UserDefaults.standard.set(usage, forKey: "al_usage") } }
+    @Published var launches: [String: Int] = [:] { didSet { UserDefaults.standard.set(launches, forKey: "al_launches") } }
+    var sessionStart: Date? = nil
     @Published var backDrag: CGFloat = 0
     @Published var backLeft = true
     @Published var dragProg: CGFloat = 0
@@ -166,7 +297,11 @@ final class OS: ObservableObject {
     @Published var top: CGFloat = 47
     @Published var bottom: CGFloat = 34
     lazy var browser = WebModel()
-    var origin: CGPoint? = nil
+    var originRect: CGRect? = nil
+    var origin: CGPoint? {
+        guard let r = originRect else { return nil }
+        return CGPoint(x: r.midX, y: r.midY)
+    }
     var backHandlers: [String: () -> Bool] = [:]
 
     init() {
@@ -174,10 +309,84 @@ final class OS: ObservableObject {
         animStyle = UserDefaults.standard.integer(forKey: "al_animStyle")
         let sp = UserDefaults.standard.double(forKey: "al_animSpeed")
         animSpeed = sp < 0.4 ? 1.0 : sp
+        reduceMotion = UD.b("al_reduce", false)
+        wallpaper = UD.i("al_wp", 0)
+        theme = UD.i("al_theme", 0)
+        T.palette = theme
+        iconShape = UD.i("al_shape", 0)
+        gridCols = UD.i("al_cols", 4)
+        showSearch = UD.b("al_search", true)
+        showClock = UD.b("al_clock", true)
+        clockStyle = UD.i("al_clockstyle", 0)
+        if let w = UserDefaults.standard.string(forKey: "al_widgets") {
+            widgets = w.split(separator: ",").map { String($0) }
+        }
+        haptics = UD.b("al_haptics", true)
+        keepAwake = UD.b("al_awake", false)
+        UIApplication.shared.isIdleTimerDisabled = keepAwake
+        hideNotif = UD.b("al_hidenotif", false)
+        banners = UD.b("al_banners", true)
+        lockOn = UD.b("al_lock", false)
+        locked = lockOn
+        showBuild = UD.b("al_build", true)
+        usage = (UserDefaults.standard.dictionary(forKey: "al_usage") as? [String: Double]) ?? [:]
+        launches = (UserDefaults.standard.dictionary(forKey: "al_launches") as? [String: Int]) ?? [:]
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        if wallpaper == 99 { wallpaperImage = Gallery.thumb(OS.wallpaperURL, max: 1600) }
         if let d = UserDefaults.standard.data(forKey: "al_webapps"),
            let arr = try? JSONDecoder().decode([WebAppRec].self, from: d) {
             webApps = arr
         }
+    }
+
+    static var wallpaperURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("wallpaper.jpg")
+    }
+
+    func setWallpaperPhoto(_ img: UIImage) {
+        if let data = img.jpegData(compressionQuality: 0.85) {
+            try? data.write(to: OS.wallpaperURL)
+            wallpaperImage = Gallery.thumb(OS.wallpaperURL, max: 1600)
+            wallpaper = 99
+        }
+    }
+
+    var iconRadius: CGFloat { iconShape == 0 ? 29 : (iconShape == 1 ? 22 : 14) }
+
+    func dur(_ base: Double) -> Double { reduceMotion ? 0.12 : base / animSpeed }
+
+    func appName(_ id: String) -> String {
+        if let a = allApps.first(where: { $0.id == id }) { return a.name }
+        if let w = webAppInfos.first(where: { $0.id == id }) { return w.name }
+        return id
+    }
+
+    func endSession() {
+        if let a = open, let t = sessionStart {
+            usage[a.id, default: 0] += Date().timeIntervalSince(t)
+        }
+        sessionStart = nil
+    }
+
+    func resetSettings() {
+        animStyle = 0
+        animSpeed = 1.0
+        reduceMotion = false
+        wallpaper = 0
+        wallpaperImage = nil
+        theme = 0
+        iconShape = 0
+        gridCols = 4
+        showSearch = true
+        showClock = true
+        clockStyle = 0
+        widgets = ["battery", "calendar"]
+        haptics = true
+        keepAwake = false
+        hideNotif = false
+        banners = true
+        lockOn = false
+        showBuild = true
     }
 
     var webAppInfos: [AppInfo] {
@@ -232,7 +441,7 @@ final class OS: ObservableObject {
     func post(_ appId: String, _ title: String, _ body: String) {
         let n = Notif(appId: appId, title: title, body: body, date: Date())
         notifs.insert(n, at: 0)
-        if dnd { return }
+        if dnd || !banners { return }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { banner = n }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
             if self?.banner?.id == n.id {
@@ -251,18 +460,23 @@ final class OS: ObservableObject {
     }
 
     func backEnded(_ dx: CGFloat) {
+        if locked { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { backDrag = 0 }
         if dx > 70 && allow("back") { goBack() }
     }
 
     func dragApp(_ dy: CGFloat) {
-        guard open != nil && appShown && animStyle == 0 else { return }
+        guard open != nil && appShown && (animStyle == 1 || animStyle == 2) else { return }
         animTimer?.invalidate()
         animTimer = nil
         prog = 1 - 0.7 * min(1, max(0, -dy) / 300)
     }
 
     func bottomEnded(_ dy: CGFloat, slow: Bool) {
+        if locked {
+            if dy < -80 { withAnimation(.easeIn(duration: 0.25)) { locked = false } }
+            return
+        }
         let appOpen = open != nil && appShown
         if dy > -30 {
             if appOpen { animateProg(to: 1, duration: 0.25) }
@@ -280,6 +494,7 @@ final class OS: ObservableObject {
     }
 
     func topOpen(left: Bool) {
+        if locked { return }
         guard allow("top") else { return }
         if panel == .none {
             withAnimation(.easeOut(duration: 0.25)) { panel = left ? .notif : .qs }
@@ -293,6 +508,7 @@ final class OS: ObservableObject {
     }
 
     func goBack() {
+        if locked { return }
         if panel != .none { closePanel(); return }
         if showRecents { home(); return }
         if drawer {
@@ -334,8 +550,10 @@ final class OS: ObservableObject {
         animTimer = timer
     }
 
-    func launch(_ a: AppInfo, from p: CGPoint? = nil) {
-        origin = p
+    func launch(_ a: AppInfo, from r: CGRect? = nil) {
+        if locked { return }
+        if haptics { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+        originRect = r
         withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
             recents.removeAll { $0.id == a.id }
             recents.insert(a, at: 0)
@@ -345,10 +563,20 @@ final class OS: ObservableObject {
         }
         animTimer?.invalidate()
         animTimer = nil
-        prog = 0
+        endSession()
         appShown = true
+        prog = 0
         open = a
-        animateProg(to: 1, duration: 0.45 / animSpeed)
+        sessionStart = Date()
+        launches[a.id, default: 0] += 1
+        if animStyle == 0 {
+            NativeFX.open(symbol: a.icon, tint: UIColor(a.tint), from: r, radius: iconRadius, duration: dur(0.5)) { [weak self] in
+                guard let self = self else { return }
+                if self.open != nil { self.prog = 1 }
+            }
+        } else {
+            animateProg(to: 1, duration: dur(0.45))
+        }
     }
 
     func home() {
@@ -362,8 +590,19 @@ final class OS: ObservableObject {
             prog = 0
             return
         }
+        animTimer?.invalidate()
+        animTimer = nil
+        endSession()
+        if animStyle == 0 && appShown && prog > 0.5 {
+            appShown = false
+            NativeFX.close(to: originRect, radius: iconRadius, duration: dur(0.42)) { [weak self] in
+                self?.prog = 0
+                self?.open = nil
+            }
+            return
+        }
         appShown = false
-        animateProg(to: 0, duration: 0.4 / animSpeed) { [weak self] in
+        animateProg(to: 0, duration: dur(0.4)) { [weak self] in
             guard let self = self else { return }
             if !self.appShown {
                 self.open = nil
@@ -468,6 +707,7 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
     }
 
     func free(_ t: CGPoint) {
+        if os.locked { return }
         if os.panel != .none {
             if t.y < -40 && (start.y > 380 || t.y < -140) {
                 os.closePanel()
@@ -586,6 +826,86 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 }
 
+// MARK: - Native app open/close animation (Core Animation, independent of SwiftUI redraws)
+enum NativeFX {
+    static func keyWindow() -> UIWindow? {
+        let wins = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+        return wins.first(where: { $0.isKeyWindow }) ?? wins.first
+    }
+
+    static func iconRect(_ r: CGRect?, in b: CGRect) -> CGRect {
+        if let r = r, r.width > 1 { return r }
+        return CGRect(x: b.midX - 29, y: b.maxY - 130, width: 58, height: 58)
+    }
+
+    static func open(symbol: String, tint: UIColor, from r: CGRect?, radius: CGFloat, duration: Double, done: @escaping () -> Void) {
+        guard let w = keyWindow() else { done(); return }
+        let full = w.bounds
+        let start = iconRect(r, in: full)
+        let card = UIView(frame: start)
+        card.backgroundColor = UIColor(red: 0.08, green: 0.09, blue: 0.11, alpha: 1)
+        card.clipsToBounds = true
+        card.layer.cornerCurve = .continuous
+        card.layer.cornerRadius = radius
+        let cfg = UIImage.SymbolConfiguration(pointSize: 26, weight: .medium)
+        let iv = UIImageView(image: UIImage(systemName: symbol, withConfiguration: cfg))
+        iv.tintColor = tint
+        iv.contentMode = .center
+        iv.frame = CGRect(x: 0, y: 0, width: start.width, height: start.height)
+        iv.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        card.addSubview(iv)
+        w.addSubview(card)
+
+        let corner = CABasicAnimation(keyPath: "cornerRadius")
+        corner.fromValue = radius
+        corner.toValue = 0
+        corner.duration = duration
+        corner.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        card.layer.add(corner, forKey: "corner")
+        card.layer.cornerRadius = 0
+
+        UIView.animate(withDuration: duration * 0.3, animations: { iv.alpha = 0 })
+        UIView.animate(withDuration: duration, delay: 0, usingSpringWithDamping: 0.9, initialSpringVelocity: 0.3,
+                       options: [.curveEaseOut], animations: {
+            card.frame = full
+        }, completion: { _ in
+            done()
+            UIView.animate(withDuration: 0.18, animations: { card.alpha = 0 },
+                           completion: { _ in card.removeFromSuperview() })
+        })
+    }
+
+    static func close(to r: CGRect?, radius: CGFloat, duration: Double, ready: () -> Void) {
+        guard let w = keyWindow(), let snap = w.snapshotView(afterScreenUpdates: false) else {
+            ready()
+            return
+        }
+        let full = w.bounds
+        snap.frame = full
+        snap.clipsToBounds = true
+        snap.layer.cornerCurve = .continuous
+        snap.layer.cornerRadius = 40
+        w.addSubview(snap)
+        ready()
+        let end = iconRect(r, in: full)
+        let corner = CABasicAnimation(keyPath: "cornerRadius")
+        corner.fromValue = 40
+        corner.toValue = radius
+        corner.duration = duration
+        corner.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        snap.layer.add(corner, forKey: "corner")
+        snap.layer.cornerRadius = radius
+        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut], animations: {
+            snap.frame = end
+        }, completion: nil)
+        UIView.animate(withDuration: duration * 0.45, delay: duration * 0.55, options: [], animations: {
+            snap.alpha = 0
+        }, completion: { _ in snap.removeFromSuperview() })
+    }
+}
+
 // MARK: - Root
 struct PhoneView: View {
     @ObservedObject var os: OS
@@ -601,8 +921,8 @@ struct PhoneView: View {
             ZStack {
                 Wallpaper().ignoresSafeArea()
                 Home()
-                    .scaleEffect(1 - 0.06 * os.prog)
-                    .opacity(1 - 0.4 * Double(os.prog))
+                    .scaleEffect(1 - 0.06 * (os.animStyle == 0 ? 0 : os.prog))
+                    .opacity(1 - 0.4 * Double(os.animStyle == 0 ? 0 : os.prog))
                     .animation(.spring(response: 0.5, dampingFraction: 0.86), value: os.appShown)
                 if let a = os.open {
                     AppHost(app: a, anchor: anchor())
@@ -652,12 +972,16 @@ struct PhoneView: View {
                     .allowsHitTesting(false)
                     .zIndex(6)
                 }
+                if os.locked {
+                    LockScreen().transition(.opacity).zIndex(20)
+                }
                 if os.panel != .none {
                     Shade()
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .zIndex(5)
                 }
             }
+            .id(os.theme)
             .ignoresSafeArea(.container)
             .onAppear {
                 os.top = g.safeAreaInsets.top
@@ -671,16 +995,24 @@ struct PhoneView: View {
 
 // MARK: - Wallpaper (cheap gradients, no blur)
 struct Wallpaper: View {
+    @EnvironmentObject var os: OS
     var body: some View {
+        let w = wallpapers[min(max(os.wallpaper, 0), wallpapers.count - 1)]
         ZStack {
-            LinearGradient(colors: [Color(red: 0.05, green: 0.08, blue: 0.2),
-                                    Color(red: 0.16, green: 0.1, blue: 0.3)],
-                           startPoint: .top, endPoint: .bottom)
-            RadialGradient(colors: [Color(red: 0.3, green: 0.5, blue: 0.9).opacity(0.55), .clear],
-                           center: .topLeading, startRadius: 10, endRadius: 440)
-            RadialGradient(colors: [Color(red: 0.85, green: 0.4, blue: 0.7).opacity(0.4), .clear],
-                           center: .bottomTrailing, startRadius: 10, endRadius: 500)
+            if os.wallpaper == 99, let img = os.wallpaperImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                Color.black.opacity(0.25)
+            } else {
+                LinearGradient(colors: [w.a, w.b], startPoint: .top, endPoint: .bottom)
+                RadialGradient(colors: [w.c.opacity(0.55), .clear],
+                               center: .topLeading, startRadius: 10, endRadius: 440)
+                RadialGradient(colors: [w.d.opacity(0.4), .clear],
+                               center: .bottomTrailing, startRadius: 10, endRadius: 500)
+            }
         }
+        .clipped()
     }
 }
 
@@ -763,7 +1095,7 @@ struct Banner: View {
                 .background(Circle().fill(tintFor(n.appId).opacity(0.2)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(n.title).font(.system(size: 14, weight: .semibold))
-                Text(n.body).font(.system(size: 13)).opacity(0.8).lineLimit(1)
+                Text(os.hideNotif ? "Content hidden" : n.body).font(.system(size: 13)).opacity(0.8).lineLimit(1)
             }
             Spacer()
         }
@@ -809,10 +1141,13 @@ struct FramePref: PreferenceKey {
 }
 
 struct IconGlyph: View {
+    @EnvironmentObject var os: OS
     let app: AppInfo
     var body: some View {
         ZStack {
-            Circle().fill(app.tint.opacity(0.22))
+            RoundedRectangle(cornerRadius: os.iconRadius,
+                             style: os.iconShape == 0 ? RoundedCornerStyle.circular : RoundedCornerStyle.continuous)
+                .fill(app.tint.opacity(0.22))
             if let l = app.letter {
                 if let fu = faviconURL(app.url) {
                     AsyncImage(url: fu) { phase in
@@ -843,11 +1178,13 @@ struct Icon: View {
 
     var body: some View {
         Button {
-            let p: CGPoint? = frame == .zero ? nil : CGPoint(x: frame.midX, y: frame.midY)
-            os.launch(app, from: p)
+            os.launch(app, from: frame == .zero ? nil : frame)
         } label: {
             VStack(spacing: 6) {
                 IconGlyph(app: app)
+                    .background(GeometryReader { gp in
+                        Color.clear.preference(key: FramePref.self, value: gp.frame(in: .global))
+                    })
                 if label {
                     Text(app.name)
                         .font(.system(size: 11))
@@ -856,12 +1193,9 @@ struct Icon: View {
                 }
             }
             .frame(maxWidth: .infinity)
+            .onPreferenceChange(FramePref.self) { frame = $0 }
         }
         .buttonStyle(.plain)
-        .background(GeometryReader { gp in
-            Color.clear.preference(key: FramePref.self, value: gp.frame(in: .global))
-        })
-        .onPreferenceChange(FramePref.self) { frame = $0 }
         .contextMenu {
             if app.id.hasPrefix("web:") {
                 Button(role: .destructive) {
@@ -887,11 +1221,144 @@ struct StackClock: View {
     }
 }
 
+struct DigitalClock: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            Text(fmtDate("h:mm"))
+                .font(.system(size: 66, weight: .light, design: .rounded))
+                .foregroundColor(.white)
+        }
+    }
+}
+
+struct WidgetCard: View {
+    @EnvironmentObject var os: OS
+    let kind: String
+
+    func title() -> String {
+        switch kind {
+        case "battery": return "Battery"
+        case "calendar": return "Calendar"
+        case "notes": return "Keep Notes"
+        case "storage": return "Storage"
+        default: return "Notifications"
+        }
+    }
+
+    func big() -> String {
+        switch kind {
+        case "battery":
+            let l = UIDevice.current.batteryLevel
+            return l < 0 ? "--" : "\(Int(l * 100))%"
+        case "calendar":
+            return fmtDate("d MMM")
+        case "notes":
+            return "Note"
+        case "storage":
+            return gb(storageInfo().free)
+        default:
+            return "\(os.notifs.count)"
+        }
+    }
+
+    func small() -> String {
+        switch kind {
+        case "battery":
+            return os.saver ? "Battery Saver on" : "Looking good"
+        case "calendar":
+            let ev = os.events[fmtDate("yyyy-MM-dd")] ?? []
+            return ev.first ?? "No events today"
+        case "notes":
+            let n = UserDefaults.standard.string(forKey: "androidlite_note") ?? ""
+            return n.isEmpty ? "Tap to write a note" : n
+        case "storage":
+            return "free"
+        default:
+            return os.notifs.first?.title ?? "All caught up"
+        }
+    }
+
+    func go() {
+        switch kind {
+        case "calendar":
+            if let a = appFor("cal") { os.launch(a) }
+        case "notes":
+            if let a = appFor("notes") { os.launch(a) }
+        case "notifs":
+            withAnimation(.easeOut(duration: 0.25)) { os.panel = .notif }
+        default:
+            if let a = appFor("settings") { os.launch(a) }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title()).font(.system(size: 12)).opacity(0.7)
+            Text(big()).font(.system(size: 26, weight: .semibold))
+            Text(small()).font(.system(size: 12)).opacity(0.75).lineLimit(2)
+            if kind == "battery" {
+                ProgressView(value: Double(max(0, UIDevice.current.batteryLevel))).tint(T.accent)
+            }
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 26, style: .continuous).fill(T.card.opacity(0.92)))
+        .onTapGesture { go() }
+    }
+}
+
+struct LockScreen: View {
+    @EnvironmentObject var os: OS
+    @State var dy: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Wallpaper()
+            Color.black.opacity(0.25)
+            VStack(spacing: 10) {
+                Spacer().frame(height: 100)
+                StackClock()
+                Text(fmtDate("EEEE, MMM d")).font(.system(size: 18, weight: .medium))
+                if !os.notifs.isEmpty {
+                    Text("\(os.notifs.count) notifications")
+                        .font(.system(size: 13))
+                        .padding(.horizontal, 14).padding(.vertical, 7)
+                        .background(Capsule().fill(Color.white.opacity(0.15)))
+                }
+                Spacer()
+                Image(systemName: "chevron.up")
+                Text("Swipe up to unlock").font(.system(size: 13)).opacity(0.7)
+                Spacer().frame(height: 50)
+            }
+            .foregroundColor(.white)
+        }
+        .ignoresSafeArea()
+        .offset(y: dy)
+        .gesture(
+            DragGesture()
+                .onChanged { v in dy = min(0, v.translation.height) }
+                .onEnded { v in
+                    if v.translation.height < -100 {
+                        withAnimation(.easeIn(duration: 0.22)) { dy = -UIScreen.main.bounds.height }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                            os.locked = false
+                            dy = 0
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dy = 0 }
+                    }
+                }
+        )
+    }
+}
+
 struct Home: View {
     @EnvironmentObject var os: OS
     @State var q = ""
     @FocusState var focus: Bool
-    let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    var cols: [GridItem] { Array(repeating: GridItem(.flexible(), spacing: 8), count: os.gridCols) }
 
     func openDrawer() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { os.drawer = true }
@@ -908,20 +1375,31 @@ struct Home: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                StackClock()
-                Text(fmtDate("EEEE, MMM d"))
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(.white)
-                Text("build 11" + (os.debug.isEmpty ? "" : " · " + os.debug))
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.35))
+            if os.showClock {
+                VStack(alignment: .leading, spacing: 4) {
+                    if os.clockStyle == 0 { StackClock() } else { DigitalClock() }
+                    Text(fmtDate("EEEE, MMM d"))
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(.white)
+                    if os.showBuild {
+                        Text("build 12" + (os.debug.isEmpty ? "" : " · " + os.debug))
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.35))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 28)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 28)
+            if !os.widgets.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(Array(os.widgets.prefix(2)), id: \.self) { k in WidgetCard(kind: k) }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+            }
             Spacer(minLength: 8)
             LazyVGrid(columns: cols, spacing: 18) {
-                ForEach(Array((homeApps + os.webAppInfos).prefix(12))) { a in Icon(app: a) }
+                ForEach(Array((homeApps + os.webAppInfos).prefix(os.gridCols * 3))) { a in Icon(app: a) }
             }
             .padding(.horizontal, 12)
             Spacer(minLength: 8)
@@ -930,23 +1408,25 @@ struct Home: View {
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 14)
-            HStack(spacing: 12) {
-                Text("G").font(.system(size: 20, weight: .bold)).foregroundColor(T.accent)
-                TextField("Search", text: $q)
-                    .focused($focus)
-                    .foregroundColor(.white)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-                    .keyboardType(.webSearch)
-                    .submitLabel(.search)
-                    .onSubmit { search() }
-                Image(systemName: "mic.fill").foregroundColor(.white.opacity(0.8))
-                Image(systemName: "camera.viewfinder").foregroundColor(.white.opacity(0.8))
+            if os.showSearch {
+                HStack(spacing: 12) {
+                    Text("G").font(.system(size: 20, weight: .bold)).foregroundColor(T.accent)
+                    TextField("Search", text: $q)
+                        .focused($focus)
+                        .foregroundColor(.white)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .keyboardType(.webSearch)
+                        .submitLabel(.search)
+                        .onSubmit { search() }
+                    Image(systemName: "mic.fill").foregroundColor(.white.opacity(0.8))
+                    Image(systemName: "camera.viewfinder").foregroundColor(.white.opacity(0.8))
+                }
+                .padding(.horizontal, 20)
+                .frame(height: 52)
+                .background(Capsule().fill(T.card.opacity(0.95)))
+                .padding(.horizontal, 16)
             }
-            .padding(.horizontal, 20)
-            .frame(height: 52)
-            .background(Capsule().fill(T.card.opacity(0.95)))
-            .padding(.horizontal, 16)
             Spacer().frame(height: 50)
         }
         .padding(.top, os.padTop)
@@ -1150,7 +1630,7 @@ struct NotifCard: View {
                 Text("\(appFor(n.appId)?.name ?? "System") · \(n.date, style: .relative)")
                     .font(.system(size: 12)).opacity(0.65)
                 Text(n.title).font(.system(size: 15, weight: .semibold))
-                Text(n.body).font(.system(size: 14)).opacity(0.85)
+                Text(os.hideNotif ? "Content hidden" : n.body).font(.system(size: 14)).opacity(0.85)
             }
             Spacer()
             Button {
@@ -1244,7 +1724,16 @@ struct QSPanel: View {
                 Spacer()
                 SmallTile(icon: "battery.25", on: $os.saver)
                 Spacer()
-                SmallTile(icon: "screenrotation", on: $os.rotate)
+                Button {
+                    os.home()
+                    withAnimation(.easeOut(duration: 0.25)) { os.locked = true }
+                } label: {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 20))
+                        .frame(width: 64, height: 64)
+                        .foregroundColor(.white)
+                        .background(Circle().fill(T.card))
+                }
                 Spacer()
                 Button {
                     os.post("settings", "Test notification", "Notifications work!")
@@ -1314,31 +1803,110 @@ struct AppWindow: View {
     }
 }
 
+struct Fx {
+    var sc: CGFloat = 1
+    var ox: CGFloat = 0
+    var oy: CGFloat = 0
+    var flip: Double = 0
+    var op: Double = 1
+    var r: CGFloat = 0
+    var anchor: UnitPoint = .center
+}
+
 struct AppHost: View {
     @EnvironmentObject var os: OS
     let app: AppInfo
     let anchor: UnitPoint
 
-    func fx(_ p: CGFloat) -> (CGFloat, CGFloat, Double, CGFloat, UnitPoint) {
-        let h = UIScreen.main.bounds.height
+    func fx(_ p: CGFloat) -> Fx {
+        let sz = UIScreen.main.bounds.size
+        var f = Fx()
         switch os.animStyle {
+        case 0:
+            f.op = Double(p)
         case 1:
-            return (0.96 + 0.04 * p, (1 - p) * h * 0.55, min(1, Double(p) * 4), 40 * (1 - p), .center)
+            f.op = min(1, Double(p) * 6)
         case 2:
-            return (0.88 + 0.12 * p, 0, Double(p), 36 * (1 - p), .center)
+            f.sc = 0.12 + 0.88 * p
+            f.op = min(1, Double(p) * 5)
+            f.r = 220 * pow(1 - p, 3)
+            f.anchor = anchor
+        case 3:
+            f.sc = 0.96 + 0.04 * p
+            f.oy = (1 - p) * sz.height * 0.55
+            f.op = min(1, Double(p) * 4)
+            f.r = 40 * (1 - p)
+        case 4:
+            f.sc = 0.88 + 0.12 * p
+            f.op = Double(p)
+            f.r = 36 * (1 - p)
+        case 5:
+            f.ox = (1 - p) * sz.width
+            f.op = min(1, Double(p) * 4)
+        case 6:
+            let o = p + 0.12 * sin(p * CGFloat.pi)
+            f.sc = 0.5 + 0.5 * o
+            f.op = min(1, Double(p) * 4)
+            f.r = 50 * (1 - p)
+        case 7:
+            f.flip = Double(1 - p) * -90
+            f.op = min(1, Double(p) * 3)
+        case 8:
+            f.oy = -(1 - p) * sz.height * 0.5
+            f.sc = 0.94 + 0.06 * p
+            f.op = min(1, Double(p) * 4)
         default:
-            return (0.12 + 0.88 * p, 0, min(1, Double(p) * 5), 220 * pow(1 - p, 3), anchor)
+            break
         }
+        return f
+    }
+
+    func morphView(_ p: CGFloat, _ sz: CGSize, _ op: Double) -> some View {
+        let ir = os.originRect ?? CGRect(x: sz.width / 2 - 29, y: sz.height - 130, width: 58, height: 58)
+        let mw = ir.width + (sz.width - ir.width) * p
+        let mh = ir.height + (sz.height - ir.height) * p
+        let cx = ir.midX + (sz.width / 2 - ir.midX) * p
+        let cy = ir.midY + (sz.height / 2 - ir.midY) * p
+        let rr = os.iconRadius * (1 - p)
+        return AppWindow(app: app)
+            .frame(width: sz.width, height: sz.height)
+            .scaleEffect(max(mw / sz.width, 0.01))
+            .frame(width: mw, height: mh)
+            .clipShape(RoundedRectangle(cornerRadius: rr, style: .continuous))
+            .position(x: cx, y: cy)
+            .opacity(op)
+    }
+
+    func circleView(_ p: CGFloat, _ sz: CGSize) -> some View {
+        let c = os.origin ?? CGPoint(x: sz.width / 2, y: sz.height - 100)
+        let maxR = hypot(max(c.x, sz.width - c.x), max(c.y, sz.height - c.y))
+        let r = 29 + (maxR - 29) * p
+        return AppWindow(app: app)
+            .mask(
+                Circle()
+                    .frame(width: r * 2, height: r * 2)
+                    .position(x: c.x, y: c.y)
+            )
+            .opacity(min(1, Double(p) * 8))
     }
 
     var body: some View {
-        let f = fx(os.prog)
+        let p = os.prog
+        let f = fx(p)
         let bp = min(1, os.backDrag / 200)
-        AppWindow(app: app)
-            .clipShape(RoundedRectangle(cornerRadius: max(f.3, 38 * bp), style: .continuous))
-            .scaleEffect(f.0 * (1 - bp * 0.08), anchor: f.4)
-            .offset(y: f.1)
-            .opacity(f.2)
+        let sz = UIScreen.main.bounds.size
+        if os.animStyle == 1 {
+            morphView(p, sz, f.op)
+        } else if os.animStyle == 9 {
+            circleView(p, sz)
+        } else {
+            AppWindow(app: app)
+                .clipShape(RoundedRectangle(cornerRadius: max(f.r, 38 * bp), style: .continuous))
+                .scaleEffect(f.sc * (1 - bp * 0.08), anchor: f.anchor)
+                .rotation3DEffect(.degrees(f.flip), axis: (x: 0, y: 1, z: 0), perspective: 0.6)
+                .offset(x: f.ox, y: f.oy)
+                .opacity(f.op)
+        }
     }
 }
 
@@ -1750,122 +2318,575 @@ struct NotesApp: View {
 }
 
 // MARK: - Settings
-struct SettingsApp: View {
-    @EnvironmentObject var os: OS
-    let styles = ["Zoom", "Slide up", "Fade"]
-    let hints = ["iPhone style: opens out of the icon", "Android style: slides up from the bottom", "Soft fade and scale"]
+func openIOSSettings() {
+    if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) }
+}
 
-    func row(_ icon: String, _ title: String, _ on: Binding<Bool>) -> some View {
-        Toggle(isOn: on) {
+struct PhotoPicker: UIViewControllerRepresentable {
+    let onPick: (UIImage) -> Void
+
+    func makeUIViewController(context: Context) -> PHPickerViewController {
+        var cfg = PHPickerConfiguration()
+        cfg.filter = .images
+        cfg.selectionLimit = 1
+        let vc = PHPickerViewController(configuration: cfg)
+        vc.delegate = context.coordinator
+        return vc
+    }
+
+    func updateUIViewController(_ vc: PHPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick) }
+
+    final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        let onPick: (UIImage) -> Void
+        init(_ f: @escaping (UIImage) -> Void) { onPick = f }
+
+        func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            picker.dismiss(animated: true)
+            guard let prov = results.first?.itemProvider, prov.canLoadObject(ofClass: UIImage.self) else { return }
+            prov.loadObject(ofClass: UIImage.self) { obj, _ in
+                if let img = obj as? UIImage {
+                    DispatchQueue.main.async { self.onPick(img) }
+                }
+            }
+        }
+    }
+}
+
+struct SToggle: View {
+    let icon: String
+    let title: String
+    let sub: String
+    @Binding var on: Bool
+    var body: some View {
+        Toggle(isOn: $on) {
             HStack(spacing: 14) {
                 Image(systemName: icon).foregroundColor(T.accent).frame(width: 26)
-                Text(title).foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundColor(.white)
+                    if !sub.isEmpty {
+                        Text(sub).font(.system(size: 12)).foregroundColor(.white.opacity(0.6))
+                    }
+                }
             }
         }
         .toggleStyle(SwitchToggleStyle(tint: T.accent))
         .padding(.horizontal, 18)
-        .frame(height: 58)
+        .padding(.vertical, 10)
     }
+}
 
-    func card<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(T.accent)
-                .padding(.horizontal, 18)
-                .padding(.top, 14)
-            content()
+struct SInfo: View {
+    let icon: String
+    let title: String
+    let value: String
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).foregroundColor(T.accent).frame(width: 26)
+            Text(title).foregroundColor(.white)
+            Spacer()
+            Text(value).foregroundColor(.white.opacity(0.65)).multilineTextAlignment(.trailing)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+}
+
+struct SAction: View {
+    let icon: String
+    let title: String
+    let sub: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: icon).foregroundColor(T.accent).frame(width: 26)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).foregroundColor(.white)
+                    if !sub.isEmpty {
+                        Text(sub).font(.system(size: 12)).foregroundColor(.white.opacity(0.6))
+                    }
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct SCard<Content: View>: View {
+    let title: String
+    let content: Content
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(T.accent)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 4)
+            }
+            content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(T.card))
         .padding(.horizontal, 16)
     }
+}
+
+struct ChipRow: View {
+    let items: [String]
+    let selected: Int
+    let pick: (Int) -> Void
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<items.count, id: \.self) { i in
+                Button { pick(i) } label: {
+                    Text(items[i])
+                        .font(.system(size: 14, weight: .medium))
+                        .padding(.horizontal, 14).padding(.vertical, 9)
+                        .foregroundColor(selected == i ? T.onAccent : .white)
+                        .background(Capsule().fill(selected == i ? T.accent : Color.white.opacity(0.08)))
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+    }
+}
+
+struct SettingsApp: View {
+    @EnvironmentObject var os: OS
+    @State var query = ""
+    @State var showPicker = false
+
+    var cats: [SCat] {
+        if query.isEmpty { return settingsCats }
+        let q = query.lowercased()
+        return settingsCats.filter { $0.title.lowercased().contains(q) || $0.sub.lowercased().contains(q) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
+            if os.settingsPage.isEmpty { mainList } else { subPage }
+        }
+        .sheet(isPresented: $showPicker) {
+            PhotoPicker { img in
+                os.setWallpaperPhoto(img)
+                showPicker = false
+            }
+        }
+        .onAppear {
+            os.backHandlers["settings"] = {
+                if !os.settingsPage.isEmpty {
+                    os.settingsPage = ""
+                    return true
+                }
+                return false
+            }
+        }
+    }
+
+    var mainList: some View {
+        VStack(spacing: 0) {
             Title(text: "Settings")
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundColor(.white.opacity(0.7))
+                TextField("Search settings", text: $query)
+                    .foregroundColor(.white)
+                    .disableAutocorrection(true)
+            }
+            .padding(.horizontal, 18)
+            .frame(height: 48)
+            .background(Capsule().fill(T.card))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
             ScrollView {
-                VStack(spacing: 14) {
-                    card("Quick settings") {
-                        row("wifi", "Network & internet", $os.wifi)
-                        row("dot.radiowaves.left.and.right", "Bluetooth", $os.bt)
-                        row("airplane", "Airplane mode", $os.airplane)
-                        row("moon.fill", "Do Not Disturb", $os.dnd)
-                        row("battery.25", "Battery Saver", $os.saver)
-                        row("screenrotation", "Auto-rotate", $os.rotate)
-                        BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.bottom, 12)
-                    }
-                    card("App animations") {
-                        HStack(spacing: 8) {
-                            ForEach(0..<3) { i in
-                                Button { os.animStyle = i } label: {
-                                    Text(styles[i])
-                                        .font(.system(size: 14, weight: .medium))
-                                        .padding(.horizontal, 16).padding(.vertical, 9)
-                                        .foregroundColor(os.animStyle == i ? T.onAccent : .white)
-                                        .background(Capsule().fill(os.animStyle == i ? T.accent : Color.white.opacity(0.08)))
+                VStack(spacing: 2) {
+                    ForEach(cats) { c in
+                        Button { os.settingsPage = c.id } label: {
+                            HStack(spacing: 16) {
+                                Image(systemName: c.icon)
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(c.tint)
+                                    .frame(width: 46, height: 46)
+                                    .background(Circle().fill(c.tint.opacity(0.22)))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(c.title).font(.system(size: 16, weight: .medium)).foregroundColor(.white)
+                                    Text(c.sub).font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
                                 }
+                                Spacer()
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 9)
                         }
-                        .padding(.horizontal, 18)
-                        Text(hints[min(max(os.animStyle, 0), 2)])
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.6))
-                            .padding(.horizontal, 18)
-                        HStack {
-                            Text("Speed").foregroundColor(.white)
-                            Spacer()
-                            Text(String(format: "%.1fx", os.animSpeed)).foregroundColor(T.accent)
-                        }
-                        .padding(.horizontal, 18)
-                        Slider(value: $os.animSpeed, in: 0.5...2.0, step: 0.1)
-                            .accentColor(T.accent)
-                            .padding(.horizontal, 18)
-                        Button {
-                            os.home()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if let a = appFor("settings") { os.launch(a) }
-                            }
-                        } label: {
-                            Text("Preview")
-                                .foregroundColor(T.onAccent)
-                                .padding(.horizontal, 22).padding(.vertical, 10)
-                                .background(Capsule().fill(T.accent))
-                        }
-                        .padding(.horizontal, 18)
-                        .padding(.bottom, 16)
-                    }
-                    card("Web apps") {
-                        if os.webApps.isEmpty {
-                            Text("Open Chrome, tap the ... menu, then Add as web app")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.6))
-                                .padding(.horizontal, 18)
-                                .padding(.bottom, 16)
-                        } else {
-                            ForEach($os.webApps) { $rec in
-                                HStack(spacing: 10) {
-                                    TextField("Name", text: $rec.name).foregroundColor(.white)
-                                    Button { os.removeWebApp(rec.id) } label: {
-                                        Image(systemName: "trash").foregroundColor(Color.red.opacity(0.9))
-                                    }
-                                }
-                                .padding(.horizontal, 18)
-                                .frame(height: 44)
-                            }
-                            Spacer().frame(height: 6)
-                        }
-                    }
-                    card("About phone") {
-                        Text("Android Lite · Android 16 style · Build 11")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.6))
-                            .padding(.horizontal, 18)
-                            .padding(.bottom, 16)
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.bottom, 20)
+                .padding(.bottom, 24)
             }
+        }
+    }
+
+    var subPage: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Button { os.settingsPage = "" } label: {
+                    Image(systemName: "chevron.left").foregroundColor(.white).frame(width: 40, height: 40)
+                }
+                Text(settingsCats.first(where: { $0.id == os.settingsPage })?.title ?? "")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            ScrollView {
+                VStack(spacing: 14) {
+                    page(os.settingsPage)
+                }
+                .padding(.bottom, 24)
+            }
+        }
+    }
+
+    @ViewBuilder func page(_ id: String) -> some View {
+        switch id {
+        case "network": pageNetwork
+        case "devices": pageDevices
+        case "apps": pageApps
+        case "notifs": pageNotifs
+        case "battery": pageBattery
+        case "storage": pageStorage
+        case "sound": pageSound
+        case "display": pageDisplay
+        case "wallpaper": pageWallpaper
+        case "home": pageHome
+        case "anim": pageAnim
+        case "access": pageAccess
+        case "security": pageSecurity
+        case "location": pageLocation
+        case "wellbeing": pageWellbeing
+        case "system": pageSystem
+        case "about": pageAbout
+        default: EmptyView()
+        }
+    }
+
+    func wBinding(_ k: String) -> Binding<Bool> {
+        Binding(
+            get: { os.widgets.contains(k) },
+            set: { on in
+                if on {
+                    if !os.widgets.contains(k) { os.widgets.append(k) }
+                } else {
+                    os.widgets.removeAll { $0 == k }
+                }
+            }
+        )
+    }
+
+    func batteryState() -> String {
+        switch UIDevice.current.batteryState {
+        case .charging: return "Charging"
+        case .full: return "Full"
+        case .unplugged: return "On battery"
+        default: return "Unknown"
+        }
+    }
+
+    func preview() {
+        os.home()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if let a = appFor("settings") { os.launch(a) }
+        }
+    }
+
+    @ViewBuilder var pageNetwork: some View {
+        SCard("Internet") {
+            SToggle(icon: "wifi", title: "Wi-Fi", sub: "Visual only. iOS controls the real Wi-Fi", on: $os.wifi)
+            SToggle(icon: "airplane", title: "Airplane mode", sub: "Visual only", on: $os.airplane)
+            SAction(icon: "gearshape", title: "Open iOS Settings", sub: "Change real network settings") { openIOSSettings() }
+        }
+    }
+
+    @ViewBuilder var pageDevices: some View {
+        SCard("Bluetooth") {
+            SToggle(icon: "dot.radiowaves.left.and.right", title: "Bluetooth", sub: "Visual only", on: $os.bt)
+            SInfo(icon: "plus.circle", title: "Pair new device", value: "Use iOS")
+        }
+    }
+
+    @ViewBuilder var pageApps: some View {
+        SCard("Installed apps (\(sortedApps.count))") {
+            ForEach(sortedApps) { a in
+                HStack(spacing: 12) {
+                    IconGlyph(app: a).scaleEffect(0.7).frame(width: 42, height: 42)
+                    Text(a.name).foregroundColor(.white)
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 2)
+            }
+        }
+        SCard("Web apps (\(os.webApps.count))") {
+            if os.webApps.isEmpty {
+                Text("Open Chrome, tap the ... menu, then Add as web app")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 14)
+            } else {
+                ForEach($os.webApps) { $rec in
+                    HStack(spacing: 10) {
+                        TextField("Name", text: $rec.name).foregroundColor(.white)
+                        Button { os.removeWebApp(rec.id) } label: {
+                            Image(systemName: "trash").foregroundColor(Color.red.opacity(0.9))
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .frame(height: 44)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder var pageNotifs: some View {
+        SCard("Notifications") {
+            SToggle(icon: "moon.fill", title: "Do Not Disturb", sub: "No heads-up banners", on: $os.dnd)
+            SToggle(icon: "rectangle.topthird.inset.filled", title: "Heads-up banners", sub: "", on: $os.banners)
+            SToggle(icon: "eye.slash", title: "Hide sensitive content", sub: "", on: $os.hideNotif)
+            SAction(icon: "trash", title: "Clear all notifications", sub: "\(os.notifs.count) right now") {
+                withAnimation { os.notifs = [] }
+            }
+        }
+    }
+
+    @ViewBuilder var pageBattery: some View {
+        SCard("Battery") {
+            SInfo(icon: "battery.100", title: "Level",
+                  value: UIDevice.current.batteryLevel < 0 ? "Unknown" : "\(Int(UIDevice.current.batteryLevel * 100))%")
+            SInfo(icon: "bolt.fill", title: "State", value: batteryState())
+            SToggle(icon: "battery.25", title: "Battery Saver", sub: "Visual only", on: $os.saver)
+        }
+    }
+
+    @ViewBuilder var pageStorage: some View {
+        let s = storageInfo()
+        let used: Int64 = max(0, s.total - s.free)
+        SCard("Device storage") {
+            SInfo(icon: "internaldrive", title: "Free", value: gb(s.free))
+            SInfo(icon: "chart.pie", title: "Used", value: gb(used))
+            ProgressView(value: s.total > 0 ? Double(used) / Double(s.total) : 0)
+                .tint(T.accent)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 14)
+            SInfo(icon: "photo", title: "Camera photos", value: "\(Gallery.list().count) files")
+        }
+    }
+
+    @ViewBuilder var pageSound: some View {
+        SCard("Sound & vibration") {
+            SToggle(icon: "hand.tap", title: "Touch vibration", sub: "Haptic tap when opening apps", on: $os.haptics)
+            SInfo(icon: "speaker.wave.2", title: "Volume", value: "Use iPhone buttons")
+        }
+    }
+
+    @ViewBuilder var pageDisplay: some View {
+        SCard("Brightness") {
+            BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 12)
+        }
+        SCard("Screen") {
+            SToggle(icon: "display", title: "Keep screen on", sub: "Stops the iPhone from sleeping", on: $os.keepAwake)
+            SToggle(icon: "screenrotation", title: "Auto-rotate", sub: "Visual only", on: $os.rotate)
+            SToggle(icon: "figure.walk.motion", title: "Reduce motion", sub: "Very quick animations", on: $os.reduceMotion)
+        }
+    }
+
+    @ViewBuilder var pageWallpaper: some View {
+        SCard("Wallpaper") {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(0..<wallpapers.count, id: \.self) { i in
+                    Button { os.wallpaper = i } label: {
+                        LinearGradient(colors: [wallpapers[i].a, wallpapers[i].c, wallpapers[i].d],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .frame(height: 84)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .stroke(os.wallpaper == i ? Color.white : Color.clear, lineWidth: 3)
+                            )
+                            .overlay(
+                                Text(wallpapers[i].name)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .padding(6),
+                                alignment: .bottomLeading
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            SAction(icon: "photo", title: "Pick a photo", sub: "From your iPhone Photos") { showPicker = true }
+        }
+        SCard("Colors") {
+            HStack(spacing: 14) {
+                ForEach(0..<6, id: \.self) { i in
+                    Button { os.theme = i } label: {
+                        Circle()
+                            .fill(T.accents[i])
+                            .frame(width: 40, height: 40)
+                            .overlay(Circle().stroke(Color.white, lineWidth: os.theme == i ? 3 : 0))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+        }
+        SCard("Icon shape") {
+            ChipRow(items: ["Circle", "Squircle", "Rounded"], selected: os.iconShape) { os.iconShape = $0 }
+        }
+    }
+
+    @ViewBuilder var pageHome: some View {
+        SCard("Clock") {
+            SToggle(icon: "clock", title: "Show clock", sub: "", on: $os.showClock)
+            ChipRow(items: ["Stacked", "Digital"], selected: os.clockStyle) { os.clockStyle = $0 }
+        }
+        SCard("Widgets (first two show on home)") {
+            SToggle(icon: "battery.100", title: "Battery", sub: "", on: wBinding("battery"))
+            SToggle(icon: "calendar", title: "Calendar", sub: "", on: wBinding("calendar"))
+            SToggle(icon: "note.text", title: "Keep Notes", sub: "", on: wBinding("notes"))
+            SToggle(icon: "internaldrive", title: "Storage", sub: "", on: wBinding("storage"))
+            SToggle(icon: "bell", title: "Notifications", sub: "", on: wBinding("notifs"))
+        }
+        SCard("Layout") {
+            SToggle(icon: "magnifyingglass", title: "Show search bar", sub: "", on: $os.showSearch)
+            ChipRow(items: ["4 columns", "5 columns"], selected: os.gridCols == 5 ? 1 : 0) {
+                os.gridCols = $0 == 1 ? 5 : 4
+            }
+        }
+    }
+
+    @ViewBuilder var pageAnim: some View {
+        SCard("Open and close style") {
+            ForEach(0..<animNames.count, id: \.self) { i in
+                Button { os.animStyle = i } label: {
+                    HStack {
+                        Text(animNames[i]).foregroundColor(.white)
+                        Spacer()
+                        if os.animStyle == i {
+                            Image(systemName: "checkmark.circle.fill").foregroundColor(T.accent)
+                        }
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        SCard("Speed") {
+            HStack {
+                Text("Speed").foregroundColor(.white)
+                Spacer()
+                Text(String(format: "%.1fx", os.animSpeed)).foregroundColor(T.accent)
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            Slider(value: $os.animSpeed, in: 0.5...2.0, step: 0.1)
+                .accentColor(T.accent)
+                .padding(.horizontal, 18)
+            SAction(icon: "play.circle", title: "Preview", sub: "Closes and reopens Settings") { preview() }
+        }
+    }
+
+    @ViewBuilder var pageAccess: some View {
+        SCard("Accessibility") {
+            SToggle(icon: "figure.walk.motion", title: "Reduce motion", sub: "Very quick animations", on: $os.reduceMotion)
+            SToggle(icon: "hand.tap", title: "Touch vibration", sub: "", on: $os.haptics)
+        }
+        SCard("Developer") {
+            SToggle(icon: "hammer", title: "Show build info on home", sub: "", on: $os.showBuild)
+        }
+    }
+
+    @ViewBuilder var pageSecurity: some View {
+        SCard("Screen lock") {
+            SToggle(icon: "lock.fill", title: "Lock screen at start", sub: "Swipe up to unlock", on: $os.lockOn)
+            SAction(icon: "lock", title: "Lock now", sub: "") {
+                os.home()
+                withAnimation(.easeOut(duration: 0.25)) { os.locked = true }
+            }
+        }
+        SCard("Privacy") {
+            SToggle(icon: "eye.slash", title: "Hide sensitive notification content", sub: "", on: $os.hideNotif)
+        }
+    }
+
+    @ViewBuilder var pageLocation: some View {
+        SCard("Location") {
+            SInfo(icon: "location", title: "Permissions", value: "Managed by iOS")
+            SAction(icon: "gearshape", title: "Open iOS Settings", sub: "") { openIOSSettings() }
+        }
+    }
+
+    @ViewBuilder var pageWellbeing: some View {
+        let ids = os.usage.keys.sorted { (os.usage[$0] ?? 0) > (os.usage[$1] ?? 0) }
+        SCard("App usage") {
+            if ids.isEmpty {
+                Text("No usage yet")
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.6))
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 14)
+            } else {
+                ForEach(ids, id: \.self) { id in
+                    SInfo(icon: "app", title: os.appName(id),
+                          value: durText(os.usage[id] ?? 0) + " · " + "\(os.launches[id] ?? 0) opens")
+                }
+            }
+            SAction(icon: "arrow.counterclockwise", title: "Reset usage", sub: "") {
+                os.usage = [:]
+                os.launches = [:]
+            }
+        }
+    }
+
+    @ViewBuilder var pageSystem: some View {
+        SCard("Gestures") {
+            SInfo(icon: "arrow.left", title: "Back", value: "Swipe from a side edge")
+            SInfo(icon: "arrow.up", title: "Home", value: "Swipe up from the bottom")
+            SInfo(icon: "square.stack", title: "Recents", value: "Swipe up and hold")
+            SInfo(icon: "bell", title: "Notifications", value: "Swipe down")
+        }
+        SCard("Reset") {
+            SAction(icon: "arrow.counterclockwise", title: "Reset all settings", sub: "Wallpaper, colors, animations") {
+                os.resetSettings()
+            }
+        }
+    }
+
+    @ViewBuilder var pageAbout: some View {
+        SCard("Device") {
+            SInfo(icon: "iphone", title: "Device name", value: UIDevice.current.name)
+            SInfo(icon: "cpu", title: "Model", value: UIDevice.current.model)
+            SInfo(icon: "number", title: "iOS version", value: UIDevice.current.systemVersion)
+        }
+        SCard("Android Lite") {
+            SInfo(icon: "number", title: "Android version", value: "16 (Lite)")
+            SInfo(icon: "hammer", title: "Build number", value: "12")
+            SInfo(icon: "globe", title: "Web apps", value: "\(os.webApps.count)")
         }
     }
 }
