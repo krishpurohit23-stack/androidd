@@ -1,4 +1,4 @@
-// ANDROID_LITE_BUILD=9
+// ANDROID_LITE_BUILD=10
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -84,6 +84,8 @@ final class OS: ObservableObject {
     @Published var showRecents = false
     @Published var drawer = false
     @Published var appShown = false
+    @Published var prog: CGFloat = 0
+    var animTimer: Timer? = nil
     @Published var debug = ""
     @Published var backDrag: CGFloat = 0
     @Published var backLeft = true
@@ -152,12 +154,23 @@ final class OS: ObservableObject {
         if dx > 70 && allow("back") { goBack() }
     }
 
+    func dragApp(_ dy: CGFloat) {
+        guard open != nil && appShown else { return }
+        animTimer?.invalidate()
+        animTimer = nil
+        prog = 1 - 0.7 * min(1, max(0, -dy) / 300)
+    }
+
     func bottomEnded(_ dy: CGFloat, slow: Bool) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { dragProg = 0 }
-        if dy > -30 { return }
+        let appOpen = open != nil && appShown
+        if dy > -30 {
+            if appOpen { animateProg(to: 1, duration: 0.25) }
+            return
+        }
         guard allow("bottom") else { return }
         if dy < -150 && slow {
             withAnimation(.easeOut(duration: 0.25)) { showRecents = true }
+            if appOpen { animateProg(to: 1, duration: 0.25) }
         } else if open == nil && !drawer && !showRecents {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) { drawer = true }
         } else {
@@ -191,30 +204,70 @@ final class OS: ObservableObject {
         }
     }
 
+    func animateProg(to target: CGFloat, duration: Double, done: (() -> Void)? = nil) {
+        animTimer?.invalidate()
+        animTimer = nil
+        let from = prog
+        if abs(target - from) < 0.001 {
+            prog = target
+            done?()
+            return
+        }
+        let t0 = CACurrentMediaTime()
+        let closing = target < from
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] tm in
+            guard let self = self else { tm.invalidate(); return }
+            let raw = min(1.0, (CACurrentMediaTime() - t0) / duration)
+            var e = 1.0 - pow(1.0 - raw, 3.0)
+            if closing {
+                e = raw < 0.5 ? 2.0 * raw * raw : 1.0 - pow(-2.0 * raw + 2.0, 2.0) / 2.0
+            }
+            self.prog = from + (target - from) * CGFloat(e)
+            if raw >= 1.0 {
+                tm.invalidate()
+                self.animTimer = nil
+                done?()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        animTimer = timer
+    }
+
     func launch(_ a: AppInfo, from p: CGPoint? = nil) {
         origin = p
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.88)) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
             recents.removeAll { $0.id == a.id }
             recents.insert(a, at: 0)
             showRecents = false
             drawer = false
             panel = .none
-            appShown = true
         }
+        animTimer?.invalidate()
+        animTimer = nil
+        prog = 0
+        appShown = true
         open = a
+        animateProg(to: 1, duration: 0.45)
     }
 
     func home() {
-        let id = open?.id
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
-            appShown = false
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.88)) {
             showRecents = false
             drawer = false
             panel = .none
-            dragProg = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            if !self.appShown && self.open?.id == id { self.open = nil }
+        guard open != nil else {
+            appShown = false
+            prog = 0
+            return
+        }
+        appShown = false
+        animateProg(to: 0, duration: 0.4) { [weak self] in
+            guard let self = self else { return }
+            if !self.appShown {
+                self.open = nil
+                self.prog = 0
+            }
         }
     }
 }
@@ -283,7 +336,7 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
                 os.backLeft = false
                 os.backDrag = max(0, -t.x)
             } else if mode == 3 && os.open != nil && os.appShown {
-                os.dragProg = min(1, max(0, -t.y) / 300)
+                os.dragApp(t.y)
             }
         case .ended, .cancelled:
             let vel = g.velocity(in: v)
@@ -305,8 +358,8 @@ final class PanHandler: NSObject, UIGestureRecognizerDelegate {
             } else {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                     os.backDrag = 0
-                    os.dragProg = 0
                 }
+                if os.open != nil && os.appShown { os.animateProg(to: 1, duration: 0.2) }
             }
         default:
             break
@@ -447,8 +500,8 @@ struct PhoneView: View {
             ZStack {
                 Wallpaper().ignoresSafeArea()
                 Home()
-                    .scaleEffect(os.appShown ? 0.94 + 0.06 * os.dragProg : 1)
-                    .opacity(os.appShown ? 0.6 + 0.4 * Double(os.dragProg) : 1)
+                    .scaleEffect(1 - 0.06 * os.prog)
+                    .opacity(1 - 0.4 * Double(os.prog))
                     .animation(.spring(response: 0.5, dampingFraction: 0.86), value: os.appShown)
                 if let a = os.open {
                     AppHost(app: a, anchor: anchor())
@@ -638,7 +691,7 @@ struct NavZone: View {
             .gesture(DragGesture(minimumDistance: 6)
                 .onChanged { v in
                     if os.open != nil && os.appShown {
-                        os.dragProg = min(1, max(0, -v.translation.height) / 300)
+                        os.dragApp(v.translation.height)
                     }
                 }
                 .onEnded { v in
@@ -727,7 +780,7 @@ struct Home: View {
                 Text(fmtDate("EEEE, MMM d"))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.white)
-                Text("build 9" + (os.debug.isEmpty ? "" : " · " + os.debug))
+                Text("build 10" + (os.debug.isEmpty ? "" : " · " + os.debug))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
             }
@@ -1103,8 +1156,8 @@ struct AppWindow: View {
 
     var body: some View {
         content
-            .padding(.top, app.id == "cam" ? 0 : os.padTop - 8)
-            .padding(.bottom, app.id == "cam" ? 0 : 34)
+            .padding(.top, (app.id == "cam" || app.id == "web") ? 0 : os.padTop - 8)
+            .padding(.bottom, (app.id == "cam" || app.id == "web") ? 0 : 34)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(T.bg.ignoresSafeArea())
     }
@@ -1130,24 +1183,16 @@ struct AppHost: View {
     @EnvironmentObject var os: OS
     let app: AppInfo
     let anchor: UnitPoint
-    @State var up = false
 
     var body: some View {
-        let on = up && os.appShown
+        let p = os.prog
         let bp = min(1, os.backDrag / 200)
-        let shrink = os.dragProg * 0.3 + bp * 0.08
-        let radius: CGFloat = on ? max(46 * os.dragProg, 38 * bp) : 220
+        let sc = (0.12 + 0.88 * p) * (1 - bp * 0.08)
+        let radius: CGFloat = max(220 * pow(1 - p, 3), 38 * bp)
         AppWindow(app: app)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .scaleEffect(on ? 1 - shrink : 0.12, anchor: anchor)
-            .offset(y: on ? -os.dragProg * 110 : 0)
-            .opacity(on ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.82), value: on)
-            .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) { up = true }
-                }
-            }
+            .scaleEffect(sc, anchor: anchor)
+            .opacity(min(1, Double(p) * 5))
     }
 }
 
@@ -1554,7 +1599,7 @@ struct SettingsApp: View {
                     BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 8)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("About phone").foregroundColor(.white)
-                        Text("Android Lite · Android 16 style · Build 9")
+                        Text("Android Lite · Android 16 style · Build 10")
                             .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -2056,6 +2101,8 @@ final class WebModel: ObservableObject {
         cfg.allowsInlineMediaPlayback = true
         web = WKWebView(frame: .zero, configuration: cfg)
         web.allowsBackForwardNavigationGestures = false
+        web.scrollView.contentInsetAdjustmentBehavior = .never
+        web.scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 28, right: 0)
         obs = [
             web.observe(\.estimatedProgress) { [weak self] w, _ in
                 DispatchQueue.main.async { self?.progress = w.estimatedProgress }
@@ -2111,25 +2158,16 @@ struct BrowserApp: View {
 }
 
 struct BrowserBody: View {
+    @EnvironmentObject var os: OS
     @ObservedObject var m: WebModel
     @State var text = ""
     @FocusState var focused: Bool
 
-    func bar(_ icon: String, _ on: Bool, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 19))
-                .foregroundColor(on ? .white : .white.opacity(0.3))
-                .frame(maxWidth: .infinity, minHeight: 44)
-        }
-        .disabled(!on)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: m.url.hasPrefix("https") ? "lock.fill" : "globe")
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.7))
                 TextField("Search or type URL", text: $text)
                     .focused($focused)
@@ -2137,20 +2175,23 @@ struct BrowserBody: View {
                     .disableAutocorrection(true)
                     .keyboardType(.webSearch)
                     .submitLabel(.go)
+                    .font(.system(size: 13))
                     .foregroundColor(.white)
                     .onSubmit { m.go(text); focused = false }
                 Button {
                     if m.loading { m.web.stopLoading() } else { m.web.reload() }
                 } label: {
                     Image(systemName: m.loading ? "xmark" : "arrow.clockwise")
+                        .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                 }
             }
-            .padding(.horizontal, 16)
-            .frame(height: 46)
-            .background(Capsule().fill(T.card))
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .frame(width: UIScreen.main.bounds.width * 0.62, height: 30)
+            .background(Capsule().fill(T.card))
+            .frame(maxWidth: .infinity)
+            .padding(.top, max(os.top, 28) - 6)
+            .padding(.bottom, 4)
 
             ZStack(alignment: .top) {
                 WebHost(web: m.web)
@@ -2162,24 +2203,8 @@ struct BrowserBody: View {
                     .frame(height: 3)
                 }
             }
-
-            HStack {
-                bar("chevron.left", m.canBack) { m.web.goBack() }
-                bar("chevron.right", m.canFwd) { m.web.goForward() }
-                bar("house", true) { m.go(WebModel.home) }
-                bar("square.and.arrow.up", !m.url.isEmpty) { share() }
-            }
-            .background(T.bg)
         }
         .onReceive(m.$url) { u in if !focused { text = u } }
         .onAppear { text = m.url }
-    }
-
-    func share() {
-        guard let u = URL(string: m.url) else { return }
-        let vc = UIActivityViewController(activityItems: [u], applicationActivities: nil)
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController }
-            .first?.present(vc, animated: true)
     }
 }
