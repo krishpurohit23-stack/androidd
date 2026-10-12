@@ -1,4 +1,4 @@
-// ANDROID_LITE_BUILD=10
+// ANDROID_LITE_BUILD=11
 import SwiftUI
 import AVFoundation
 import WebKit
@@ -24,6 +24,14 @@ struct AppInfo: Identifiable {
     let name: String
     let icon: String
     let tint: Color
+    var letter: String? = nil
+    var url: String? = nil
+}
+
+struct WebAppRec: Codable, Identifiable {
+    var id: String
+    var name: String
+    var url: String
 }
 
 let allApps: [AppInfo] = [
@@ -42,6 +50,48 @@ let allApps: [AppInfo] = [
 func appFor(_ id: String) -> AppInfo? { allApps.first(where: { $0.id == id }) }
 func iconFor(_ id: String) -> String { appFor(id)?.icon ?? "bell.fill" }
 func tintFor(_ id: String) -> Color { appFor(id)?.tint ?? T.accent }
+
+func siteName(_ urlStr: String) -> String {
+    guard let u = URL(string: urlStr), let host = u.host else { return "Web app" }
+    var parts = host.split(separator: ".").map { String($0) }
+    if parts.first == "www" { parts.removeFirst() }
+    var name = parts.first ?? host
+    if parts.count >= 2 {
+        let tld = parts[parts.count - 1]
+        let sld = parts[parts.count - 2]
+        if parts.count >= 3 && tld.count == 2 && ["co", "com", "org", "net", "gov", "ac"].contains(sld) {
+            name = parts[parts.count - 3]
+        } else {
+            name = sld
+        }
+    }
+    if name.isEmpty { return "Web app" }
+    return name.prefix(1).uppercased() + String(name.dropFirst())
+}
+
+func siteOrigin(_ urlStr: String) -> String {
+    guard let u = URL(string: urlStr), let h = u.host, let sch = u.scheme else { return urlStr }
+    return sch + "://" + h + "/"
+}
+
+func faviconURL(_ u: String?) -> URL? {
+    guard let u = u, let host = URL(string: u)?.host else { return nil }
+    return URL(string: "https://www.google.com/s2/favicons?domain=" + host + "&sz=128")
+}
+
+let webTints: [Color] = [
+    Color(red: 0.55, green: 0.9, blue: 0.6),
+    Color(red: 0.55, green: 0.75, blue: 1.0),
+    Color(red: 1.0, green: 0.75, blue: 0.4),
+    Color(red: 0.95, green: 0.6, blue: 0.85),
+    Color(red: 0.75, green: 0.7, blue: 1.0),
+    Color(red: 1.0, green: 0.65, blue: 0.6)
+]
+
+func webTint(_ id: String) -> Color {
+    let n = id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+    return webTints[n % webTints.count]
+}
 
 let sortedApps: [AppInfo] = allApps.sorted { $0.name < $1.name }
 let dockApps: [AppInfo] = ["phone", "msg", "web", "cam"].compactMap { appFor($0) }
@@ -87,6 +137,10 @@ final class OS: ObservableObject {
     @Published var prog: CGFloat = 0
     var animTimer: Timer? = nil
     @Published var debug = ""
+    @Published var animStyle = 0 { didSet { UserDefaults.standard.set(animStyle, forKey: "al_animStyle") } }
+    @Published var animSpeed: Double = 1.0 { didSet { UserDefaults.standard.set(animSpeed, forKey: "al_animSpeed") } }
+    @Published var webApps: [WebAppRec] = [] { didSet { saveWebApps() } }
+    var webModels: [String: WebModel] = [:]
     @Published var backDrag: CGFloat = 0
     @Published var backLeft = true
     @Published var dragProg: CGFloat = 0
@@ -117,6 +171,53 @@ final class OS: ObservableObject {
 
     init() {
         notifs = [Notif(appId: "msg", title: "Pixel Team", body: "Welcome to Android Lite 16 ✨", date: Date())]
+        animStyle = UserDefaults.standard.integer(forKey: "al_animStyle")
+        let sp = UserDefaults.standard.double(forKey: "al_animSpeed")
+        animSpeed = sp < 0.4 ? 1.0 : sp
+        if let d = UserDefaults.standard.data(forKey: "al_webapps"),
+           let arr = try? JSONDecoder().decode([WebAppRec].self, from: d) {
+            webApps = arr
+        }
+    }
+
+    var webAppInfos: [AppInfo] {
+        webApps.map { r in
+            AppInfo(id: "web:" + r.id, name: r.name, icon: "globe", tint: webTint(r.id),
+                    letter: String(r.name.prefix(1)).uppercased(), url: r.url)
+        }
+    }
+
+    func saveWebApps() {
+        if let d = try? JSONEncoder().encode(webApps) {
+            UserDefaults.standard.set(d, forKey: "al_webapps")
+        }
+    }
+
+    func installWebApp(url: String, wholeSite: Bool) {
+        let target = wholeSite ? siteOrigin(url) : url
+        if !target.hasPrefix("http") { return }
+        if webApps.contains(where: { $0.url == target }) {
+            post("web", "Already added", siteName(target))
+            return
+        }
+        let rec = WebAppRec(id: UUID().uuidString, name: siteName(target), url: target)
+        webApps.append(rec)
+        post("web", "Web app added", rec.name + " is on your home screen")
+    }
+
+    func removeWebApp(_ id: String) {
+        let key = "web:" + id
+        webApps.removeAll { $0.id == id }
+        webModels[key] = nil
+        recents.removeAll { $0.id == key }
+        if open?.id == key { home() }
+    }
+
+    func webModel(for a: AppInfo) -> WebModel {
+        if let m = webModels[a.id] { return m }
+        let m = WebModel(start: a.url ?? WebModel.home)
+        webModels[a.id] = m
+        return m
     }
 
     var padTop: CGFloat { max(top, 24) + 34 }
@@ -155,7 +256,7 @@ final class OS: ObservableObject {
     }
 
     func dragApp(_ dy: CGFloat) {
-        guard open != nil && appShown else { return }
+        guard open != nil && appShown && animStyle == 0 else { return }
         animTimer?.invalidate()
         animTimer = nil
         prog = 1 - 0.7 * min(1, max(0, -dy) / 300)
@@ -247,7 +348,7 @@ final class OS: ObservableObject {
         prog = 0
         appShown = true
         open = a
-        animateProg(to: 1, duration: 0.45)
+        animateProg(to: 1, duration: 0.45 / animSpeed)
     }
 
     func home() {
@@ -262,7 +363,7 @@ final class OS: ObservableObject {
             return
         }
         appShown = false
-        animateProg(to: 0, duration: 0.4) { [weak self] in
+        animateProg(to: 0, duration: 0.4 / animSpeed) { [weak self] in
             guard let self = self else { return }
             if !self.appShown {
                 self.open = nil
@@ -707,6 +808,33 @@ struct FramePref: PreferenceKey {
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
+struct IconGlyph: View {
+    let app: AppInfo
+    var body: some View {
+        ZStack {
+            Circle().fill(app.tint.opacity(0.22))
+            if let l = app.letter {
+                if let fu = faviconURL(app.url) {
+                    AsyncImage(url: fu) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFit().frame(width: 32, height: 32)
+                        } else {
+                            Text(l).font(.system(size: 24, weight: .bold)).foregroundColor(app.tint)
+                        }
+                    }
+                } else {
+                    Text(l).font(.system(size: 24, weight: .bold)).foregroundColor(app.tint)
+                }
+            } else {
+                Image(systemName: app.icon)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(app.tint)
+            }
+        }
+        .frame(width: 58, height: 58)
+    }
+}
+
 struct Icon: View {
     @EnvironmentObject var os: OS
     let app: AppInfo
@@ -719,11 +847,7 @@ struct Icon: View {
             os.launch(app, from: p)
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: app.icon)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(app.tint)
-                    .frame(width: 58, height: 58)
-                    .background(Circle().fill(app.tint.opacity(0.22)))
+                IconGlyph(app: app)
                 if label {
                     Text(app.name)
                         .font(.system(size: 11))
@@ -738,6 +862,15 @@ struct Icon: View {
             Color.clear.preference(key: FramePref.self, value: gp.frame(in: .global))
         })
         .onPreferenceChange(FramePref.self) { frame = $0 }
+        .contextMenu {
+            if app.id.hasPrefix("web:") {
+                Button(role: .destructive) {
+                    os.removeWebApp(String(app.id.dropFirst(4)))
+                } label: {
+                    Label("Remove web app", systemImage: "trash")
+                }
+            }
+        }
     }
 }
 
@@ -780,7 +913,7 @@ struct Home: View {
                 Text(fmtDate("EEEE, MMM d"))
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.white)
-                Text("build 10" + (os.debug.isEmpty ? "" : " · " + os.debug))
+                Text("build 11" + (os.debug.isEmpty ? "" : " · " + os.debug))
                     .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.35))
             }
@@ -788,7 +921,7 @@ struct Home: View {
             .padding(.horizontal, 28)
             Spacer(minLength: 8)
             LazyVGrid(columns: cols, spacing: 18) {
-                ForEach(homeApps) { a in Icon(app: a) }
+                ForEach(Array((homeApps + os.webAppInfos).prefix(12))) { a in Icon(app: a) }
             }
             .padding(.horizontal, 12)
             Spacer(minLength: 8)
@@ -828,8 +961,9 @@ struct Drawer: View {
     let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var list: [AppInfo] {
-        if q.isEmpty { return sortedApps }
-        return sortedApps.filter { $0.name.lowercased().contains(q.lowercased()) }
+        let all = (sortedApps + os.webAppInfos).sorted { $0.name.lowercased() < $1.name.lowercased() }
+        if q.isEmpty { return all }
+        return all.filter { $0.name.lowercased().contains(q.lowercased()) }
     }
 
     var body: some View {
@@ -1156,8 +1290,8 @@ struct AppWindow: View {
 
     var body: some View {
         content
-            .padding(.top, (app.id == "cam" || app.id == "web") ? 0 : os.padTop - 8)
-            .padding(.bottom, (app.id == "cam" || app.id == "web") ? 0 : 34)
+            .padding(.top, (app.id == "cam" || app.id == "web" || app.id.hasPrefix("web:")) ? 0 : os.padTop - 8)
+            .padding(.bottom, (app.id == "cam" || app.id == "web" || app.id.hasPrefix("web:")) ? 0 : 34)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(T.bg.ignoresSafeArea())
     }
@@ -1174,7 +1308,8 @@ struct AppWindow: View {
         case "msg": MessagesApp()
         case "cam": CameraApp()
         case "photos": PhotosApp()
-        default: EmptyView()
+        default:
+            if app.id.hasPrefix("web:") { WebAppView(app: app) } else { EmptyView() }
         }
     }
 }
@@ -1184,15 +1319,60 @@ struct AppHost: View {
     let app: AppInfo
     let anchor: UnitPoint
 
+    func fx(_ p: CGFloat) -> (CGFloat, CGFloat, Double, CGFloat, UnitPoint) {
+        let h = UIScreen.main.bounds.height
+        switch os.animStyle {
+        case 1:
+            return (0.96 + 0.04 * p, (1 - p) * h * 0.55, min(1, Double(p) * 4), 40 * (1 - p), .center)
+        case 2:
+            return (0.88 + 0.12 * p, 0, Double(p), 36 * (1 - p), .center)
+        default:
+            return (0.12 + 0.88 * p, 0, min(1, Double(p) * 5), 220 * pow(1 - p, 3), anchor)
+        }
+    }
+
     var body: some View {
-        let p = os.prog
+        let f = fx(os.prog)
         let bp = min(1, os.backDrag / 200)
-        let sc = (0.12 + 0.88 * p) * (1 - bp * 0.08)
-        let radius: CGFloat = max(220 * pow(1 - p, 3), 38 * bp)
         AppWindow(app: app)
-            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .scaleEffect(sc, anchor: anchor)
-            .opacity(min(1, Double(p) * 5))
+            .clipShape(RoundedRectangle(cornerRadius: max(f.3, 38 * bp), style: .continuous))
+            .scaleEffect(f.0 * (1 - bp * 0.08), anchor: f.4)
+            .offset(y: f.1)
+            .opacity(f.2)
+    }
+}
+
+struct WebProgress: View {
+    @ObservedObject var m: WebModel
+    var body: some View {
+        if m.loading {
+            GeometryReader { g in
+                Rectangle().fill(T.accent)
+                    .frame(width: g.size.width * CGFloat(m.progress), height: 3)
+            }
+            .frame(height: 3)
+        }
+    }
+}
+
+struct WebAppView: View {
+    @EnvironmentObject var os: OS
+    let app: AppInfo
+    var body: some View {
+        let m = os.webModel(for: app)
+        VStack(spacing: 0) {
+            Color.clear.frame(height: max(os.top, 28))
+            ZStack(alignment: .top) {
+                WebHost(web: m.web)
+                WebProgress(m: m)
+            }
+        }
+        .onAppear {
+            os.backHandlers[app.id] = {
+                if m.canBack { m.web.goBack(); return true }
+                return false
+            }
+        }
     }
 }
 
@@ -1572,6 +1752,8 @@ struct NotesApp: View {
 // MARK: - Settings
 struct SettingsApp: View {
     @EnvironmentObject var os: OS
+    let styles = ["Zoom", "Slide up", "Fade"]
+    let hints = ["iPhone style: opens out of the icon", "Android style: slides up from the bottom", "Soft fade and scale"]
 
     func row(_ icon: String, _ title: String, _ on: Binding<Bool>) -> some View {
         Toggle(isOn: on) {
@@ -1585,28 +1767,104 @@ struct SettingsApp: View {
         .frame(height: 58)
     }
 
+    func card<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(T.accent)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(T.card))
+        .padding(.horizontal, 16)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Title(text: "Settings")
             ScrollView {
-                VStack(spacing: 2) {
-                    row("wifi", "Network & internet", $os.wifi)
-                    row("dot.radiowaves.left.and.right", "Bluetooth", $os.bt)
-                    row("airplane", "Airplane mode", $os.airplane)
-                    row("moon.fill", "Do Not Disturb", $os.dnd)
-                    row("battery.25", "Battery Saver", $os.saver)
-                    row("screenrotation", "Auto-rotate", $os.rotate)
-                    BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.vertical, 8)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("About phone").foregroundColor(.white)
-                        Text("Android Lite · Android 16 style · Build 10")
-                            .font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
+                VStack(spacing: 14) {
+                    card("Quick settings") {
+                        row("wifi", "Network & internet", $os.wifi)
+                        row("dot.radiowaves.left.and.right", "Bluetooth", $os.bt)
+                        row("airplane", "Airplane mode", $os.airplane)
+                        row("moon.fill", "Do Not Disturb", $os.dnd)
+                        row("battery.25", "Battery Saver", $os.saver)
+                        row("screenrotation", "Auto-rotate", $os.rotate)
+                        BrightBar(v: $os.brightness).padding(.horizontal, 14).padding(.bottom, 12)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(18)
+                    card("App animations") {
+                        HStack(spacing: 8) {
+                            ForEach(0..<3) { i in
+                                Button { os.animStyle = i } label: {
+                                    Text(styles[i])
+                                        .font(.system(size: 14, weight: .medium))
+                                        .padding(.horizontal, 16).padding(.vertical, 9)
+                                        .foregroundColor(os.animStyle == i ? T.onAccent : .white)
+                                        .background(Capsule().fill(os.animStyle == i ? T.accent : Color.white.opacity(0.08)))
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 18)
+                        Text(hints[min(max(os.animStyle, 0), 2)])
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.horizontal, 18)
+                        HStack {
+                            Text("Speed").foregroundColor(.white)
+                            Spacer()
+                            Text(String(format: "%.1fx", os.animSpeed)).foregroundColor(T.accent)
+                        }
+                        .padding(.horizontal, 18)
+                        Slider(value: $os.animSpeed, in: 0.5...2.0, step: 0.1)
+                            .accentColor(T.accent)
+                            .padding(.horizontal, 18)
+                        Button {
+                            os.home()
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                                if let a = appFor("settings") { os.launch(a) }
+                            }
+                        } label: {
+                            Text("Preview")
+                                .foregroundColor(T.onAccent)
+                                .padding(.horizontal, 22).padding(.vertical, 10)
+                                .background(Capsule().fill(T.accent))
+                        }
+                        .padding(.horizontal, 18)
+                        .padding(.bottom, 16)
+                    }
+                    card("Web apps") {
+                        if os.webApps.isEmpty {
+                            Text("Open Chrome, tap the ... menu, then Add as web app")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.6))
+                                .padding(.horizontal, 18)
+                                .padding(.bottom, 16)
+                        } else {
+                            ForEach($os.webApps) { $rec in
+                                HStack(spacing: 10) {
+                                    TextField("Name", text: $rec.name).foregroundColor(.white)
+                                    Button { os.removeWebApp(rec.id) } label: {
+                                        Image(systemName: "trash").foregroundColor(Color.red.opacity(0.9))
+                                    }
+                                }
+                                .padding(.horizontal, 18)
+                                .frame(height: 44)
+                            }
+                            Spacer().frame(height: 6)
+                        }
+                    }
+                    card("About phone") {
+                        Text("Android Lite · Android 16 style · Build 11")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.6))
+                            .padding(.horizontal, 18)
+                            .padding(.bottom, 16)
+                    }
                 }
-                .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(T.card))
-                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
             }
         }
     }
@@ -2096,7 +2354,7 @@ final class WebModel: ObservableObject {
     private var obs: [NSKeyValueObservation] = []
     static let home = "https://www.google.com"
 
-    init() {
+    init(start: String = WebModel.home) {
         let cfg = WKWebViewConfiguration()
         cfg.allowsInlineMediaPlayback = true
         web = WKWebView(frame: .zero, configuration: cfg)
@@ -2120,7 +2378,7 @@ final class WebModel: ObservableObject {
                 DispatchQueue.main.async { self?.loading = w.isLoading }
             }
         ]
-        go(WebModel.home)
+        go(start)
     }
 
     func go(_ text: String) {
@@ -2185,9 +2443,25 @@ struct BrowserBody: View {
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.8))
                 }
+                Menu {
+                    Button { os.installWebApp(url: m.url, wholeSite: false) } label: {
+                        Label("Add this page as web app", systemImage: "plus.app")
+                    }
+                    Button { os.installWebApp(url: m.url, wholeSite: true) } label: {
+                        Label("Add whole site as web app", systemImage: "globe")
+                    }
+                    Button { m.go(WebModel.home) } label: {
+                        Label("Home", systemImage: "house")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(width: 20, height: 30)
+                }
             }
             .padding(.horizontal, 12)
-            .frame(width: UIScreen.main.bounds.width * 0.62, height: 30)
+            .frame(width: UIScreen.main.bounds.width * 0.7, height: 30)
             .background(Capsule().fill(T.card))
             .frame(maxWidth: .infinity)
             .padding(.top, max(os.top, 28) - 6)
